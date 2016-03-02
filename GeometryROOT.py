@@ -10,6 +10,7 @@ import atexit
 import code
 import readline
 import rlcompleter
+import numpy
  
 #
 # The following lines are work-arounds. 
@@ -193,8 +194,9 @@ class GeometryROOT():
             self._materials[matname]= ROOT.TGeoMaterial(matname,26.98,13,2.7);    # A,Z,rho
         
         else:
-            print "OOPS, the material: " + material + " has not yet been defined in Python world."
-            print "I'll pretend it is Aluminum..."
+            if self.debug: 
+                print "OOPS, the material: " + material + " has not yet been defined in Python world. ",
+                print "I'll pretend it is Aluminum..."
             return(self.FindMaterial("Aluminum", trans))
 
         self._mediums[matname] = ROOT.TGeoMedium(matname,med_index, self._materials[matname])       
@@ -240,7 +242,7 @@ class GeometryROOT():
         return(col_found)
     
     def GetColorAlpha(self,color):
-        """ Extract the color and the alpha (0-9) for the color. """
+        """ Extract the color and the alpha (0-9) for the color. Returns ROOT color and Alpha"""
                 # The following regex captures the 3 color groups + the optional alpha channel.
         m = re.match("#?([A-F0-9][A-F0-9][A-F0-9][A-F0-9][A-F0-9][A-F0-9])([0-9]?)",color,re.I)
         if not m:
@@ -266,7 +268,11 @@ class GeometryROOT():
                 
     def Build_volumes(self,geo,mother="root"):
         """Take the GeometryEngine geo argument and build a tree of ROOT volumes from it.
-           The tree starts at the geo volume mother"""
+           The tree starts at the geo volume mother and then recureses down for each daughter.
+           Note that this means that an orphan (volume with mother that is not part of this tree)
+           will NOT be placed!
+           Multiple geometry trees can be build by subsequent calls to Build_volumes."""
+
         if not isinstance(geo,GeometryEngine):
             print "The argument to Build_root_volumes MUST be a GeometryEngine object"
             return
@@ -274,15 +280,36 @@ class GeometryROOT():
         self._geo_engine.append(geo)  # Store the GeometryEngine in case needed later.
         self._geo_engine_current = geo
         
-        #
+        # 
+        # Check to see if the "mother" exists. 
+        # If not found,
+        #   If "mother"="root", then 
+        #       create a root volume.
+        #   else: 
+        #       look for mother in file and create it as master.
+        if not self._volumes.has_key(mother):
+            if mother == "root":                # Place the root    
+                self.Create_root_volume()
+            else:
+                root_vol = geo.find_volume(mother)
+                if root_vol is None:
+                    print("Cannot place root volume: "+mother+" because I cannot find it.")
+                    raise NameError("Volume not found.")
+                else:
+                    if not self._volumes.has_key("root"):
+                        self.Create_root_volume()
+                        
+                    self.Place_volume(root_vol, "root")
+                    
         # We need to go through the geometry and first place all the geometries that are 
         # in the mother of geo in our mother. 
         # By GEMC definition the geo mother = "root"
+        #
         
         objl = geo.find_children(mother) # Return list of Geometry object with mother as mother.
         
-        if type(objl) is int:
-            if self.debug>9:
+        if objl is None or type(objl) is int:
+            if self.debug>4:
                 print "I could not find volumes with '"+mother+"' for mother volume. "
             return
         
@@ -344,6 +371,13 @@ class GeometryROOT():
             unit=geo_vol.rot_units
             geo_vol.rot_units=[unit,unit,unit]
 
+        if len(geo_vol.rot) < 3:
+            print("Incomplete rotation for ",str(geo_vol))
+
+
+        if len(geo_vol.rot_units) < 3:
+            print("Incomplete rotation units for ",str(geo_vol))
+            
         if geo_vol.rot_order == "" or geo_vol.rot_order == "xyz":
 
             rotate = Rotation()
@@ -351,6 +385,10 @@ class GeometryROOT():
             rotate = rotate.rotateY(self.C(geo_vol.rot[1],geo_vol.rot_units[1],"rad"))
             rotate = rotate.rotateZ(self.C(geo_vol.rot[2],geo_vol.rot_units[2],"rad"))
   
+        #
+        # NOTE: This should be rewritten to parsse the xyz string, and then call the appropriate rotations
+        #
+
         elif geo_vol.rot_order == "zxy":
 
             rotate = Rotation()
@@ -365,8 +403,29 @@ class GeometryROOT():
             rotate = rotate.rotateX(self.C(geo_vol.rot[1],geo_vol.rot_units[1],"rad"))
             rotate = rotate.rotateZ(self.C(geo_vol.rot[2],geo_vol.rot_units[2],"rad"))
 
+        elif geo_vol.rot_order == "zyx":
+
+            rotate = Rotation()
+            rotate = rotate.rotateZ(self.C(geo_vol.rot[0],geo_vol.rot_units[0],"rad"))
+            rotate = rotate.rotateY(self.C(geo_vol.rot[1],geo_vol.rot_units[1],"rad"))
+            rotate = rotate.rotateX(self.C(geo_vol.rot[2],geo_vol.rot_units[2],"rad"))
+
+        elif geo_vol.rot_order == "yzx":
+
+            rotate = Rotation()
+            rotate = rotate.rotateY(self.C(geo_vol.rot[0],geo_vol.rot_units[0],"rad"))
+            rotate = rotate.rotateZ(self.C(geo_vol.rot[1],geo_vol.rot_units[1],"rad"))
+            rotate = rotate.rotateX(self.C(geo_vol.rot[2],geo_vol.rot_units[2],"rad"))
+
+        elif geo_vol.rot_order == "yxz":
+
+            rotate = Rotation()
+            rotate = rotate.rotateY(self.C(geo_vol.rot[0],geo_vol.rot_units[0],"rad"))
+            rotate = rotate.rotateX(self.C(geo_vol.rot[1],geo_vol.rot_units[1],"rad"))
+            rotate = rotate.rotateZ(self.C(geo_vol.rot[2],geo_vol.rot_units[2],"rad"))
+
         else:
-            raise NameError('===== OOPS ==== I do not know about an '+geo_vol.rot_order+' rotation. Sorry. ')
+            raise NameError('===== OOPS ==== I do not know about a ',geo_vol.rot_order,' rotation. Sorry. ')
 
         return(rotate)
     
@@ -482,6 +541,27 @@ class GeometryROOT():
                                         self.C(geo_vol.dimensions[9],geo_vol.dims_units[9],"cm"),
                                         self.C(geo_vol.dimensions[10],geo_vol.dims_units[10],"deg"))
 #            Double_t dz, Double_t theta, Double_t phi, Double_t h1, Double_t bl1, Double_t tl1, Double_t alpha1, Double_t h2, Double_t bl2, Double_t tl2, Double_t alpha2)
+        elif geo_vol.g4type == "G4GenericTrap":
+            if type(geo_vol.dims_units) is str:
+                unit = geo_vol.dims_units
+                geo_vol.dims_units=[unit]*len(geo_vol.dims)
+
+            newgeo_shape= ROOT.TGeoArb8(geo_vol.name+"_shape",
+                                        self.C(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm"))
+
+            if self.debug > 1: print("Creating TGeoArb8: ",)
+
+            for i in range(8):
+                if self.debug > 1:
+                    print("[",i,",",self.C(geo_vol.dimensions[i*2+1],geo_vol.dims_units[i*2+1],"cm"),",",
+                                       self.C(geo_vol.dimensions[i*2+2],geo_vol.dims_units[i*2+2],"cm"),"]",)
+
+                newgeo_shape.SetVertex(i,self.C(geo_vol.dimensions[i*2+1],geo_vol.dims_units[i*2+1],"cm"),
+                                       self.C(geo_vol.dimensions[i*2+2],geo_vol.dims_units[i*2+2],"cm"))
+
+            if self.debug > 1: print()
+
+
         elif geo_vol.g4type == "EllipticalTube" or geo_vol.g4type == "Eltu":
             if type(geo_vol.dims_units) is str:
                 unit = geo_vol.dims_units
@@ -492,6 +572,52 @@ class GeometryROOT():
                                         self.C(geo_vol.dimensions[1],geo_vol.dims_units[1],"cm"),
                                         self.C(geo_vol.dimensions[2],geo_vol.dims_units[2],"cm"))
 
+        elif geo_vol.g4type == "Paraboloid":
+            if type(geo_vol.dims_units) is str:
+                unit = geo_vol.dims_units
+                geo_vol.dims_units=[unit]*3
+                
+            newgeo_shape = ROOT.TGeoParaboloid(geo_vol.name+"+shape",
+                                    self.C(geo_vol.dimensions[1],geo_vol.dims_units[1],"cm"), # Rlo
+                                    self.C(geo_vol.dimensions[2],geo_vol.dims_units[2],"cm"), # Rhi
+                                    self.C(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm")) # Dz
+        
+        elif geo_vol.g4type == "Ellipsoid":
+            if type(geo_vol.dims_units) is str:
+                unit = geo_vol.dims_units
+                geo_vol.dims_units=[unit]*5
+            #
+            # This one is a bit tricky. There is no Ellipsoid in ROOT world, so we will need to approximate
+            # it by creating a sphere, which is then stretched in x,y to right shape, and clipped at the 
+            # ends by a box. This should have been WAY easier....
+            #
+            dx    = self.C(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm")
+            dy    = self.C(geo_vol.dimensions[1],geo_vol.dims_units[1],"cm")
+            radius= self.C(geo_vol.dimensions[2],geo_vol.dims_units[2],"cm")
+            z1    = self.C(geo_vol.dimensions[3],geo_vol.dims_units[3],"cm")
+            z2    = self.C(geo_vol.dimensions[4],geo_vol.dims_units[4],"cm")
+        
+            sx = dx/radius
+            sy = dy/radius
+            sz = 1
+            
+            if (z1 == 0 and z2 == 0) or z1 >= z2:
+                z1 = -radius
+                z2 = +radius              
+                        
+            tmp_sph  = ROOT.TGeoSphere(0,radius)
+            tmp_scale= ROOT.TGeoScale("",sx,sy,sz)
+            tmp_shape =ROOT.TGeoScaledShape(geo_vol.name+"_ellip",tmp_sph,tmp_scale)
+            #
+            # This gives a stretched sphere = ellipsoid.
+            # Now cut the top and bottom....
+            # 
+            z = 0.5*(z1+z2)
+            dz = 0.5*(z2 - z1)
+            tmp_cut_box = ROOT.TGeoBBox(geo_vol.name+"_cutbox",dx,dy,dz,numpy.array([0.,0.,z]))
+            tmp_bool_node = ROOT.TGeoIntersection(tmp_shape,tmp_cut_box,0,0)
+            newgeo_shape = ROOT.TGeoCompositeShape(geo_vol.name+"_shape",tmp_bool_node)
+            
         elif geo_vol.g4type == "Cons":
             if type(geo_vol.dims_units) is str:
                 print "We have a problem. Cons "+ geo_vol.name+" has bad units = string."
@@ -523,6 +649,10 @@ class GeometryROOT():
             delta_phi = self.C(geo_vol.dimensions[1],geo_vol.dims_units[1],"deg")
             nplanes   = int(geo_vol.dimensions[2])
             
+            if self.debug>2:
+                print("Polycone: s_phi="+str(start_phi)+" delta_phi="+str(delta_phi)+" nplanes="+str(nplanes)+" name="
+                      +geo_vol.name)
+            
             newgeo_shape = ROOT.TGeoPcon(geo_vol.name+"_shape",start_phi,delta_phi,nplanes)
 
             for np in range(nplanes):
@@ -530,7 +660,8 @@ class GeometryROOT():
                 rmax = self.C(geo_vol.dimensions[3 + 1*nplanes + np],geo_vol.dims_units[3 + 1*nplanes + np],"cm")
                 z    = self.C(geo_vol.dimensions[3 + 2*nplanes + np],geo_vol.dims_units[3 + 2*nplanes + np],"cm")               
                 newgeo_shape.DefineSection(np,z,rmin,rmax)
-
+                if self.debug>2:
+                    print("rmax = "+str(rmax)+" rmin= "+str(rmin)+"  z= "+str(z))
 
         elif geo_vol.g4type == "Pgon" or  geo_vol.g4type == "Polyhedra":
             if type(geo_vol.dims_units) is str:
@@ -573,13 +704,13 @@ class GeometryROOT():
             # by simply placing the new shape at trans = -trans_1 + trans_final  
             # We need to follow the GEMC calculation.
             
-            match=re.match("Operation:([~@])?\W*(\w*)\W*([+-])\W*(\w*)\W*",geo_vol.g4type)
+            match=re.match("Operation:([~@])?\W*(\w*)\W*([*+-])\W*(\w*)\W*",geo_vol.g4type) # * must be first in char list: [*+-]
             special = match.group(1)
             shape1_name = match.group(2)
             operation = match.group(3)
             shape2_name = match.group(4)
             if self.debug >4:
-                print "Operation found: " + geo_vol.g4type + " = '" + shape1_name + "' " + operation + " '"+ shape2_name+"'"           
+                print("Operation found: " + geo_vol.g4type + " = '" + shape1_name + "' " + operation + " '"+ shape2_name+"'")
             
 #
 # The following is effectively a recursive call. If the lines for placing the required shapes had not
@@ -598,24 +729,28 @@ class GeometryROOT():
              
             shape1 = self._shapes[shape1_name]    
             shape2 = self._shapes[shape2_name]
-#            transrot2 = self.ComputeCombiTrans(self._geo_engine_current.find_volume(shape2_name))
+            #  transrot2 = self.ComputeCombiTrans(self._geo_engine_current.find_volume(shape2_name))
+
+            trans1,rot1 = self._translations[shape1_name]            
             trans2,rot2 = self._translations[shape2_name]
-            transrot2 = self.ComputeCombiTrans(shape2_name,trans2,rot2) 
             transrot1=0
 
             if special == "@": 
-#               transrot1 = self.ComputeCombiTrans(self._geo_engine_current.find_volume(shape1_name))
-# Can get the translation-rotation from storage:
-                trans1,rot1 = self._translations[shape1_name]
-                
+
+                if self.debug>4:
+                        print("Special operation: "+str(special))
+                              
                 net_trans = trans2 - trans1
-                net_trans_rot = rot2*net_trans
-                
-                rot1inv = rot1.I
-                net_rot = rot1inv*rot2
-                
+                net_trans_rot = rot1*net_trans
+#                 
+                net_rot = (rot2*rot1.I)
+#                net_rot = (rot1*rot2.I).I
                 transrot2 = self.ComputeCombiTrans(geo_vol.name, net_trans_rot, net_rot)  
-                          
+                
+            else:
+                transrot2 = self.ComputeCombiTrans(shape2_name,trans2,rot2) 
+                     
+          
             if operation == "-":
                 opshape = ROOT.TGeoSubtraction(shape1,shape2,transrot1,transrot2)
             elif operation == "+":
@@ -627,6 +762,17 @@ class GeometryROOT():
 
             newgeo_shape = ROOT.TGeoCompositeShape(geo_vol.name+"_shape",opshape)
                 
+
+        elif re.match("CopyOf .*",geo_vol.g4type):
+            match = re.match("CopyOf (.*)",geo_vol.g4type)
+            shape_name = match.group(1)
+            if self.debug: print("Making and placing a copy of "+shape_name)
+            find_shape = self._shapes[shape_name]
+            if find_shape is None:
+                print("The Shape "+shape_name+" was not found, or not yet placed!")
+                raise
+            else:
+                newgeo_shape=find_shape
         else:
             raise NameError("The geometry shape: "+ geo_vol.g4type +" is not yet defined.")
 
@@ -675,21 +821,22 @@ class GeometryROOT():
             return
         
         if self.debug > 1:
-            print "Mother: "+ mother+ " Volume: "+ geo_vol.name + "  Type:" + geo_vol.g4type + "  Material:"+geo_vol.material + " Vis:"+str(geo_vol.visible)
-            print "    dimension:"+str(geo_vol.dimensions) + " units:" + str(geo_vol.dims_units)
-            print "    position :"+str(geo_vol.pos)+"  pos units:"+str(geo_vol.pos_units)
-            print "    rotation :"+str(geo_vol.rot)+"  rot units:"+str(geo_vol.rot_units)
-            print ""
-
+            print("Mother: "+ mother+ " Volume: "+ geo_vol.name + "  Type:" + geo_vol.g4type + "  Material:"+geo_vol.material + " Vis:"+str(geo_vol.visible))
+            print("    dimension:"+str(geo_vol.dimensions) + " units:" + str(geo_vol.dims_units))
+            print("    position :"+str(geo_vol.pos)+"  pos units:"+str(geo_vol.pos_units))
+            print("    rotation :"+str(geo_vol.rot)+"  rot units:"+str(geo_vol.rot_units))
+            print("    color: "+str(color))
+            print ("")
         newgeo_shape = self.Get_volume_shape(geo_vol)
  
-        if newgeo_shape == 0:
+        if newgeo_shape == 0 or newgeo_shape is None:
             if self.debug:
                 print "Cannot place this volume on the stack."
                 return
 
         if self.debug > 6:
             print "Put '"+geo_vol.name+"' put on shapes table "
+            
         if medium == 0:
             if self.debug > 5:
                 print "Component volume '"+geo_vol.name+"' put on shapes table only"

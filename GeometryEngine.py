@@ -200,6 +200,14 @@ class Geometry():
         if tmp_list[0].strip()=="ordered:":
             order=tmp_list[1]
             dims,dims_units = self.parse_gemc_str(' '.join(tmp_list[2:]),base_unit)
+        elif len(tmp_list)==1:  # Single statement. This is usually an erroneous "0" entry.
+            print("Warning: Rotation with only one entry: "+str(tmp_list[0]))
+            if not tmp_list[0] == "0":
+                print("But I don't know what to do with it! Setting rotation to zero.")
+                
+            dims = [0,0,0]
+            dims_units=["deg"]*3
+
         else:
             dims,dims_units = self.parse_gemc_str(string,base_unit)
             
@@ -223,7 +231,12 @@ class Geometry():
                 dims_units.append('cm')  # If there was no unit, make it cm.
             else:
 #           exec(strunits+"ans="+p)
-                num,unit = p.split('*')
+                try:
+                    num,unit = p.split('*')
+                except :
+                    print("There was a problem parsing: ",p)
+                    raise
+
                 if self.debug>2: 
                     print "Conversion: ",p," to ",num," ",unit
                 if unit == "inches":
@@ -368,28 +381,28 @@ class Geometry():
                 return(4)
             for x in self.pos:
                 if not (type(x) is int or type(x) is float):
-                    return(4)
+                    return(41)
         else:
-            return(4)
+            return(42)
         
         try:
             self.make_string(self.pos, self.pos_units)
         except:
-            return(4)
+            return(43)
         
         if type(self.rot) is list or type(self.rot) is tuple:
             if not len(self.rot) == 3:
                 return(5)
             for x in self.rot:
                 if not (type(x) is int or type(x) is float):
-                    return(5)
+                    return(51)
         else:
-            return(5)
+            return(52)
         
         try:
             self.make_string(self.rot, self.rot_units)
         except:
-            return(5)
+            return(53)
 
         if not type(self.col) is str:
             return(6)
@@ -423,22 +436,22 @@ class Geometry():
             return(14)
         
         if not (self.style ==0 or self.style == 1):
-            return(14)
-
-        if not type(self.sensitivity) is str:
             return(15)
 
-        if not type(self.hittype) is str:
+        if not type(self.sensitivity) is str:
             return(16)
 
-        if not type(self.identity) is str:
+        if not type(self.hittype) is str:
             return(17)
 
-        if not type(self.rmin) is int:
+        if not type(self.identity) is str:
             return(18)
 
-        if not type(self.rmax) is int:
+        if not type(self.rmin) is int:
             return(19)
+
+        if not type(self.rmax) is int:
+            return(20)
 
         
         return(0)
@@ -845,12 +858,12 @@ class GeometryEngine():
 # OK, we usually have just one sensitive detector per geometry, so this might be over kill. Still it is handy.
         if not isinstance(self._Geometry,list):   # Are we initialized?
             print "This GeometryEngine appears not to be inialized"
-            return(-1)
+            return(None)
         
         prog = re.compile(name,flags)
         found = [x for x in self._Geometry if prog.match(x.name)]
         if len(found)==0:
-            return(-1)
+            return(None)
 
         return(found)
     
@@ -859,11 +872,11 @@ class GeometryEngine():
 # OK, we usually have just one sensitive detector per geometry, so this might be over kill. Still it is handy.
         if not isinstance(self._Geometry,list):   # Are we initialized?
             print "GeometryEngine seems not to be inialized"
-            return(-1)
+            return(None)
         
         found = [x for x in self._Geometry if x.name == name]
         if len(found)==0:
-            return(-1)
+            return(None)
         
         if len(found)>1:
             print "Warning: More than one Detector Geometry with name:"+ name+" found in GeometryEngine"
@@ -882,7 +895,7 @@ class GeometryEngine():
         prog = re.compile(name,flags)
         found = [x for x in self._Geometry if prog.match(x.mother)]
         if len(found)==0:
-            return(-1)
+            return(None)
 
         return(found)
     
@@ -891,11 +904,11 @@ class GeometryEngine():
 # OK, we usually have just one sensitive detector per geometry, so this might be over kill. Still it is handy.
         if not isinstance(self._Geometry,list):   # Are we initialized?
             print "It seems that the GeometryEngine is not inialized"
-            return(-1)
+            return(None)
         
         found = [x for x in self._Geometry if x.mother == name]
         if len(found)==0:
-            return(-1)
+            return(None)
         
         return(found)
             
@@ -910,7 +923,7 @@ class GeometryEngine():
         if len(found)==0:
             if self.debug>1:
                 print "Sensitive detector "+ sens_name+" not found in GeometryEngine"
-            return(-1)
+            return(None)
         
         if len(found)>1:
             print "Warning: More than one Sensitive detector with name:"+ sens_name+" found in GeometryEngine"
@@ -1363,9 +1376,10 @@ class GeometryEngine():
         fin = open(mfile,"r")
         
         for line in fin:
-            obs = line.strip().split("|")   # Split line on the |
-            obs = [x.strip() for x in obs]  # Squeeze leading and trailing whitespace for each term.
-            if self.debug > 0:
+            obs = map(str.strip,line.split("|"))   # Split line on the |
+            if len(obs) < 2:
+                continue
+            if self.debug > 1:
                 print obs
             geo = Geometry()
             geo.debug = self.debug

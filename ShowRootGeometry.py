@@ -32,6 +32,7 @@ def main(argv=None):
     parser.add_argument('-d','--debug',action="count",help='Increase the general debug level by one.')
     parser.add_argument('-rd','--rootdebug',action="count",help='Increase the ROOT debug level by one.')
     parser.add_argument('-gd','--geomdebug',action="count",help='Increase the Geometry debug level by one.')
+    parser.add_argument('-m','--mother',type=str,default="root",help='Specify the mother volume. Only below this volume is shown. default: root')
     parser.add_argument('tables',type=str,nargs="+",help='list of geometry files to render')
 
     args = parser.parse_args(argv[1:])
@@ -64,8 +65,8 @@ def main(argv=None):
     
     rr=GeometryROOT()
     rr.debug = args.rootdebug
-    rr.Create_root_volume()
-    rr.Build_volumes(gen)
+    rr.Build_volumes(gen,args.mother)
+    rr.CloseGeometry()
     rr.Interact()
 
 
