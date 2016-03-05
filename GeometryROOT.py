@@ -475,13 +475,21 @@ class GeometryROOT():
                                         self.C(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm"),
                                         self.C(geo_vol.dimensions[1],geo_vol.dims_units[1],"cm"),
                                         self.C(geo_vol.dimensions[2],geo_vol.dims_units[2],"cm"))
+
             else:
+                
+                phi_start = self.C(geo_vol.dimensions[3],geo_vol.dims_units[3],"deg")
+                phi_end   = phi_start + self.C(geo_vol.dimensions[4],geo_vol.dims_units[4],"deg")
+            
+                # print("Tube: Phi_start = "+str(phi_start)+"  Phi_end = "+str(phi_end))
+
                 newgeo_shape = ROOT.TGeoTubeSeg(geo_vol.name+"_shape",
                                         self.C(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm"),
                                         self.C(geo_vol.dimensions[1],geo_vol.dims_units[1],"cm"),
                                         self.C(geo_vol.dimensions[2],geo_vol.dims_units[2],"cm"),
-                                        self.C(geo_vol.dimensions[3],geo_vol.dims_units[3],"deg"),
-                                        self.C(geo_vol.dimensions[4],geo_vol.dims_units[4],"deg"))
+                                        phi_start,
+                                        phi_end)
+ 
                 
         elif geo_vol.g4type == "Sphere":
             if type(geo_vol.dims_units) is str:
@@ -505,6 +513,7 @@ class GeometryROOT():
             if type(geo_vol.dims_units) is str:
                 print "We have a problem. Parallelepiped "+ geo_vol.name+" has bad units = string."
                 
+            
             newgeo_shape = ROOT.TGeoPara(geo_vol.name+"_shape",
                                         self.C(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm"),
                                         self.C(geo_vol.dimensions[1],geo_vol.dims_units[1],"cm"),
