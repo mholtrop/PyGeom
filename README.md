@@ -21,6 +21,9 @@ The program will read the geometry file and then render it. It will also start a
 For the expert: In your terminal, you will be dropped back to a Python prompt. This is a fully interactive Python shell, with the full geometry in a GeomertyROOT object which is named "rr". You can add new objects, make existing object invisble, etc, all from the command line. 
 When you are done, just type quit(), or Crtl-D in the terminal.
 One useful option is to use "-m vol_name" to make "vol_name" the mother volume, and thus only render that volume and all daughters. This can really simplify your viewing if you only want to see a part of the detector.
+
+![Image of CLAS12 rendered with ShowRootGeometry](https://raw.githubusercontent.com/mholtrop/PyGeom/master/clas12.png)
+
 #### Checking for Overlaps
 We can now use the ROOT geomerty engine to check for overlaps. In the terminal we tell ROOT to check for overlaps, with 0.001 accuracy:
 
