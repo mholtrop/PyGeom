@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 import sys
 import argparse
@@ -7,12 +7,16 @@ import re
 try:
     import ROOT
 except:
-    print "It seems you do not have ROOT setup, or PyROOT is not enabled in your ROOT distribution. Sorry."
+    print "It seems you do not have ROOT setup, or PyROOT is not enabled in your ROOT distribution, or not working properly. Try: python -c 'import ROOT' to diagnose problem. Sorry."
     sys.exit()
 
+import GeometryROOT
+import GeometryEngine
+
 try:
-    from GeometryROOT import GeometryROOT
-    from GeometryEngine import Geometry,GeometryEngine
+#    from PyGeom import Geometry
+    pass
+    
 except:
     print "The GeometryEngine and/or  GeometryROOT Python packages were not found in your PythonPath. Please add them!"
     sys.exit()
@@ -65,9 +69,9 @@ def main(argv=None):
     
     rr=GeometryROOT()
     rr.debug = args.rootdebug
-    rr.Build_volumes(gen,args.mother)
-    rr.CloseGeometry()
-    rr.Interact()
+    rr.build_volumes(gen,args.mother)
+    rr.close_geometry()
+    rr.interact()
 
 
 if __name__ == "__main__":
