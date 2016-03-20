@@ -5,7 +5,12 @@ This is a package that allows you to author Gemc geometry from a bit of Python c
 
 The code also allows you to import a Gemc txt file, then view the geometry in ROOT, and write it all out as a skeleton Python code for further manipulation. 
 
-The sections below give an introduction for different features.
+To learn to use the package, checkout the interactive Python Notebooks at Binder:
+[![Binder](http://mybinder.org/badge.svg)](http://mybinder.org/repo/mholtrop/PyGeom)
+
+----------
+
+The sections below give an introduction for different features of the ShowRootGeometry.py script.
 
 ----------
 ## ShowRootGeometry
@@ -16,7 +21,7 @@ You can see in the script itself that this is accomplished with just a few lines
 ####How to use ShowRootGeometry
 From the command line (make sure ROOT is setup properly) you just type:
 
-    ShowRootGeometry clas12__geometry_original.txt
+    ./ShowRootGeometry.py clas12__geometry_original.txt
 The program will read the geometry file and then render it. It will also start a TBrowser. In the TBrowser, you will find the rendered geomerty tree under the "GEMC" folder. Double click on "GEMC",  and then each lower object to see the whole tree. Setting or unsetting the check mark will make the object visible or invisible.
 For the expert: In your terminal, you will be dropped back to a Python prompt. This is a fully interactive Python shell, with the full geometry in a GeomertyROOT object which is named "rr". You can add new objects, make existing object invisble, etc, all from the command line. 
 When you are done, just type quit(), or Crtl-D in the terminal.
