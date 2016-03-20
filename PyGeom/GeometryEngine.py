@@ -29,17 +29,17 @@ class GeometryEngine():
     Expansion to other geometry formats is possible, see for instance the GeometryROOT class.
     """
 
-    _DataBase=0
-    _cursor=0
+    _DataBase=None
+    _cursor=None
     _Detector=""
-    _Geometry=0    # Stores all the geometries objects for the current detector part.
-    _Materials=0
-    _Parameters=0  # Paraeters to go into __parameter table
-    _Sensitive_Detector=0        # 
-    _Geometry_Table=""
-    _Parameters_Table=""
-    _Hit_Table=""
-    _Banks_Table=""
+    _Geometry=None    # Stores all the geometries objects for the current detector part.
+    _Materials=None
+    _Parameters=None  # Paraeters to go into __parameter table
+    _Sensitive_Detector=None        # 
+    _Geometry_Table=None
+    _Parameters_Table=None
+    _Hit_Table=None
+    _Banks_Table=None
     
     table_variation=0
     table_id = 0
@@ -196,16 +196,20 @@ class GeometryEngine():
 
     def MySQL_OpenDB(self,machine,user,passwd,database):
         """Open a MySQL database 'database' on host 'machine', with credentials 'user','passwd' """
-        self._DataBase = MySQLdb.connect(machine,user,passwd,database)
-        self._cursor = self._DataBase.cursor()
-        self._DataBase.raise_on_warnings = True
-        self._Geometry_Table = self._Detector + "__geometry"
-        self._Parameters_Table = self._Detector + "__parameters"
-        self._Hit_Table = self._Detector + "__hit"
-        self._Banks_Table = self._Detector + "__bank"
-        if self.debug:
-            print "Database "+database+" opened for "+user+" on "+machine
-            print self._DataBase
+        try:
+            self._DataBase = MySQLdb.connect(machine,user,passwd,database)
+            self._cursor = self._DataBase.cursor()
+            self._DataBase.raise_on_warnings = True
+            self._Geometry_Table = self._Detector + "__geometry"
+            self._Parameters_Table = self._Detector + "__parameters"
+            self._Hit_Table = self._Detector + "__hit"
+            self._Banks_Table = self._Detector + "__bank"
+            if self.debug:
+                print "Database "+database+" opened for "+user+" on "+machine
+                print self._DataBase
+        except Exception as e:
+            print "Error connecting to the database. Make sure MySQLdb is available."
+            print e
             
     def MySQL_Table_Exists(self,table):
         """Returns True if the table exists, False if it does not. """
@@ -703,7 +707,8 @@ class GeometryEngine():
     def __str__(self):
         """ Return string with list of what the geometry currently contains. """
         s_out=""
-        if isinstance(self._DataBase,MySQLdb.connection):
+        
+        if self._DataBase and isinstance(self._DataBase,MySQLdb.connection):
             s_out = "Database: " + self._DataBase.get_host_info() + "\n"
         else:
             s_out = "Database:  NOT OPENED \n"
@@ -713,6 +718,17 @@ class GeometryEngine():
             s_out+= "     "+i.name+" in "+i.mother+ " ::"+i.description+"\n"
 
         return(s_out)
+    
+    def __getitem__(self,item):
+        """ Return the Geometry object asked for in item. Allows for gen[0] or gen['paddle'] """
+        
+        if type(item) is str:
+            return(self.find_volume(item))
+        elif type(item) is int:
+            if item < 0 or item > len(self._Geometry):
+                return("Geometry Object out of bounds for index"+str(item))
+            else:
+                return(self._Geometry[item])
 
  
 def testsuite():
