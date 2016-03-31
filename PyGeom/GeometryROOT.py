@@ -925,6 +925,7 @@ class GeometryROOT():
     def draw(self,option=""):
         """ draw an wireframe version of the objects """
         topvol = self._geom.GetTopVolume()
+        topvol.SetVisibility(0)
         self._geom.SetVisOption(0)
         self._geom.SetTopVisible(0)
         topvol.Draw(option)
