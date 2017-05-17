@@ -7,7 +7,9 @@ import re
 try:
     import ROOT
 except:
-    print "It seems you do not have ROOT setup, or PyROOT is not enabled in your ROOT distribution, or not working properly. Try: python -c 'import ROOT' to diagnose problem. Sorry."
+    print("You are using Python: ",sys.version)
+    print("It seems you do not have ROOT setup for this version of Python, or PyROOT is not enabled in your ROOT distribution,",
+          " or not working properly. Try: python -c 'import ROOT' to diagnose problem. Sorry.")
     sys.exit()
 
 from PyGeom import GeometryROOT
@@ -19,7 +21,7 @@ try:
     pass
     
 except:
-    print "The GeometryEngine and/or  GeometryROOT Python packages were not found in your PythonPath. Please add them!"
+    print("The GeometryEngine and/or  GeometryROOT Python packages were not found in your PythonPath. Please add them!")
     sys.exit()
 
 
@@ -43,10 +45,10 @@ def main(argv=None):
     args = parser.parse_args(argv[1:])
 
     if args.debug:
-        print "Debug level is: "+str(args.debug)
+        print("Debug level is: "+str(args.debug))
 
     if args.debug >1:
-        print "Rendering ",args.tables
+        print("Rendering ",args.tables)
 
 
     gen = GeometryEngine("clas12")
@@ -56,14 +58,14 @@ def main(argv=None):
 
     for ff in args.tables:
         if re.match('.*_geometry_*',ff):  # This is a geoemtry file.
-            if args.debug: print "Parsing geometry file",ff
+            if args.debug: print("Parsing geometry file",ff)
 
             gen.TXT_Read_Geometry(ff)
 
         if re.match('.*_materials_*',ff):  # This is a materials file.
-            if args.debug: print "Parsing materials file",ff
+            if args.debug: print("Parsing materials file",ff)
             
-            print "So sorry, but I don't have a materials parser... yet ..."
+            print("So sorry, but I don't have a materials parser... yet ...")
 
 
     # Now render the geometry and drop into interactive mode.

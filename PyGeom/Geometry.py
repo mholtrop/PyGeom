@@ -58,8 +58,8 @@ class Geometry():
     rmax=10000
 
     def __init__(self,
-                 name="",
-                 mother="",
+                 name="unknown",
+                 mother="root",
                  description="",
                  pos=[0,0,0],
                  pos_units="cm",
@@ -70,7 +70,7 @@ class Geometry():
                  g4type="",
                  dimensions="",
                  dims_units="cm",
-                 material="",
+                 material="Vacuum",
                  magfield="no",
                  ncopy=1,
                  pmany=1,

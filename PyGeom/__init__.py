@@ -17,3 +17,5 @@ try:
     from GeometryROOT import GeometryROOT
 except:
     print("Python was not able to import ROOT (i.e. PyROOT), so showing geometry with GeometryROOT will not be available.")
+
+#from GeometryROOT import GeometryROOT

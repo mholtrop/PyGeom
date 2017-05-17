@@ -23,15 +23,15 @@ import numpy
 
 try:
     import ROOT
+    #
+    # The following lines are work-arounds. 
+    #
+    ROOT.PyConfig.StartGuiThread = 'inputhook'    # Allow the OpenGL display to work without a crash.
+    #ROOT.TGeoMaterial.__init__._creates = False   # This is supposed to prevent python from crashing on exit,
+    #ROOT.TGeoMedium.__init__._creates = False     # but it doesn't.
+
 except:
-    print "It seems you did not enable ROOT properly on your system. Please source 'thisroot.sh' or 'thisroot.csh' "
- 
-#
-# The following lines are work-arounds. 
-#
-ROOT.PyConfig.StartGuiThread = 'inputhook'    # Allow the OpenGL display to work without a crash.
-#ROOT.TGeoMaterial.__init__._creates = False   # This is supposed to prevent python from crashing on exit,
-#ROOT.TGeoMedium.__init__._creates = False     # but it doesn't.
+    print "It seems you did not enable ROOT properly on your system. Please source 'thisroot.sh' or 'thisroot.csh' from the ROOT distribution."
 
 from GeometryEngine import GeometryEngine
 from Geometry import Geometry
@@ -68,7 +68,8 @@ class GeometryROOT():
         self._geom = ROOT.TGeoManager(name,"Python ROOT Geometry Engine for GEMC")
         self._mats_table = self._geom.GetElementTable()
         self._geom.SetVisOption(0)
-        self._conv_dict,self._trans_dict = Geometry().unit_convert_dict("cm deg")
+        # Get a unit conversion table from ghe Geometry class. Yes, it needs a minimal init.
+        self._conv_dict,self._trans_dict = Geometry(name="convert",g4type="").unit_convert_dict("cm deg")
         #
         # Setup the materials to be used.
         #
@@ -324,7 +325,7 @@ class GeometryROOT():
             new_value = value*self._conv_dict[unit.strip()]
             return new_value
         else:
-            conv_dict,_  = Geometry().unit_convert_dict(new_unit)
+            conv_dict,_  = Geometry(name="convert",g4type="",dimensions="").unit_convert_dict(new_unit)
             new_value = value*conv_dict[unit]
             return new_value
                 
@@ -927,6 +928,7 @@ class GeometryROOT():
         topvol = self._geom.GetTopVolume()
         self._geom.SetVisOption(0)
         self._geom.SetTopVisible(0)
+        topvol.SetVisibility(0)
         topvol.Draw(option)
         
     
@@ -972,7 +974,7 @@ class GeometryROOT():
         
         if init_view:
             shell.push("browser=ROOT.TBrowser()")
-            shell.push("rr.draw()")
+            shell.push("rr.draw('ogl')")
         shell.interact()
 
         
