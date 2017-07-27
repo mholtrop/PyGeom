@@ -6,16 +6,16 @@ class Geometry
 The Geometry class defines a geometry in the GEMC fashion. The Geometry class is mostly a class to store all the parameters
 of the GEANT4 geometry object.
 
-A Geometry class object behaves as a list (i.e. gen[0] returns the name, gen[1] the mother) and also as a dictionary 
-(i.e. gen['name'] returns the name.). If you print the gen object, it prints as a GEMC geometry.txt line. If you 
+A Geometry class object behaves as a list (i.e. gen[0] returns the name, gen[1] the mother) and also as a dictionary
+(i.e. gen['name'] returns the name.). If you print the gen object, it prints as a GEMC geometry.txt line. If you
 call MySQL_str you get a MySQL SQL string to insert the object into a database. The python_str() will give a Python statement
 to create a gen object.
 
 A Geometry class can be created in a Python script and then added to a GeometryEngine, or
 the GeometryEngine can read a GEMC text file, or MySQL database. The Geomtery class can then
 be passed to a GeometryROOT class to render the object in ROOT.
- 
-A utility call calc_g4_trapezoid, is there to help create the parameters for a G4Trapezoid. 
+
+A utility call calc_g4_trapezoid, is there to help create the parameters for a G4Trapezoid.
  """
 
 import math
@@ -23,27 +23,62 @@ import re
 
 class Geometry():
     """ A Class for storing the geometry of an objects to be rendered in the output.
-    You would typicaly create a list of these Geometry() objects, and then pass this list
-    to one of the output engines. """
+    You would typicaly add these objects into a GeometryEngine object.
+    Each of the paramters corresponds to the parameters defined in the GEMC text
+    input format. For great detail, check the GEMC documentation.
+
+    gobj = Geometry(
+         name="unknown",  # String. Name of the object.
+         mother="root",   # String. Name of the mother of this object.
+         description="",  # String. Text description of the object.
+         pos=[0,0,0],     # List.   Position of the object in a list of 3 floats.
+         pos_units="cm",  # String. Units for the position of the object: mm, cm, inch, m
+         rot=[0,0,0],     # List.   Angles defining the rotation of the object.
+         rot_units="rad", # String. Units for the angles: deg, rad, mrad
+         rot_order="",    # String. Order of the angles: "xyz", "zyx" etc.
+         col="000000",    # String. Color for the object when it is being rendered.
+         g4type="",       # String. G4Type - the type of object, eg. "box"
+         dimensions="",   # List or String. The dimensions that correspond to the g4type
+         dims_units="cm", # String or List. The units used for the dimensions.
+                          # If string the same unit will be used for all dimensions.
+         material="Vacuum",# String. The material to be used for the object.
+         magfield="no",   # String. The magnetic field in the object. "no" for no field.
+         ncopy=1,         # Int.    The GEMC ncopy parameter, see GEMC docs.
+         pmany=1,         # Int.    The GEMC pmany parameter, see GEMC docs.
+         exist=1,         # Int.    Flag whether the object is used.
+         visible=1,       # Int.    Flag whether the object should be visible.
+         style=1,         # Int.    Flag whether the object is wireframe(0) or solid (1)
+         sensitivity="no",# String. Which type of sensitivity this object has.
+         hittype="",      # String. Which hit routine should be used for this object.
+         identity="",     # String. The id string for the object.
+         )
+    """
 #
-# Note that below are the default values for each of the geometry objects. 
+# Note that below are the default values for each of the geometry objects.
 # They can be modified when the Geometry class is instantiated.
+#
+    debug=0
+    base_units=["cm","rad"]  # Set the default units to use if units are converted.
+    force_unit_conversion=False  # Set to True to always convert units to the base units.
+#
+# Store the standard GEMC parameters set.
 #
 # Implementation question: Would this be cleaner if the all the data was stored in a single list?
 # data = {'name':" ",'mother':" ", etc}
-    debug=0
+# Would make sense, but the defaults would be harder to deal with.
+#
     name=""
     mother=""
     description=""
     pos=[0,0,0]
-    pos_units="cm"
+    pos_units=base_units[0]
     rot=[0,0,0]
-    rot_units="rad"
+    rot_units=base_units[1]
     rot_order=""      # Blank is standard zyx rotation order.
     col="000000"
     g4type=""
     dimensions=""
-    dims_units="cm"
+    dims_units=base_units[0]
     material=""
     magfield="no"
     ncopy=1
@@ -54,22 +89,20 @@ class Geometry():
     sensitivity="no"
     hittype="no"
     identity="no"
-    rmin=1
-    rmax=10000
 
     def __init__(self,
                  name="unknown",
                  mother="root",
                  description="",
                  pos=[0,0,0],
-                 pos_units="cm",
+                 pos_units=base_units[0],
                  rot=[0,0,0],
-                 rot_units="rad",
+                 rot_units=base_units[1],
                  rot_order="",
                  col="000000",
                  g4type="",
                  dimensions="",
-                 dims_units="cm",
+                 dims_units=base_units[0],
                  material="Vacuum",
                  magfield="no",
                  ncopy=1,
@@ -80,18 +113,19 @@ class Geometry():
                  sensitivity="no",
                  hittype="",
                  identity="",
-                 rmin=1,
-                 rmax=10000):
-        
-        if type(name) is tuple or type(name) is list:   # If first argument is a tuple, assume the full content. 
+                 force_unit_conversion=False,
+                 base_units=["cm","rad"]
+                 ):
+
+        if type(name) is tuple or type(name) is list:   # If first argument is a tuple, assume the full content.
             self.name=name[0]
             self.mother=name[1]
             self.description=name[2]
-            self.pos,self.pos_units=self.parse_gemc_str(name[3],"cm")
-            self.rot,self.rot_units,self.rot_order=self.parse_gemc_rot_str(name[4], "deg")
+            self.pos,self.pos_units=self.parse_gemc_str(name[3])
+            self.rot,self.rot_units,self.rot_order=self.parse_gemc_rot_str(name[4])
             self.col=name[5]
             self.g4type=name[6]
-            self.dimensions,self.dims_units=self.parse_gemc_str(name[7],"cm deg")
+            self.dimensions,self.dims_units=self.parse_gemc_str(name[7])
             self.material=name[8]
             self.magfield=name[9]
             self.ncopy=int(name[10])
@@ -102,35 +136,35 @@ class Geometry():
             self.sensitivity=name[15]
             self.hittype=name[16]
             self.identity=name[17]
-            if len(name) > 18:
-                self.rmin=name[18]
-                self.rmax=name[19]
-            else:
-                self.rmin=1
-                self.rmax=100000
-            return
-            
-        self.name = name
-        self.mother = mother
-        self.description = description
-        self.pos = pos
-        self.set_position(pos,pos_units)
-        self.set_rotation(rot,rot_units,rot_order)
-        self.col=col
-        self.g4type=g4type
-        self.set_dimensions(dimensions,dims_units)
-        self.material=material
-        self.magfield=magfield
-        self.ncopy=ncopy
-        self.pmany=pmany
-        self.exist=exist
-        self.visible=visible
-        self.style=style
-        self.sensitivity=sensitivity
-        self.hittype=hittype
-        self.identity=identity
-        self.rmin=rmin
-        self.rmax=rmax
+        elif type(name) is str:
+            self.name = name
+            self.mother = mother
+            self.description = description
+            self.pos = pos
+            self.set_position(pos,pos_units)
+            self.set_rotation(rot,rot_units,rot_order)
+            self.col=col
+            self.g4type=g4type
+            self.set_dimensions(dimensions,dims_units)
+            self.material=material
+            self.magfield=magfield
+            self.ncopy=ncopy
+            self.pmany=pmany
+            self.exist=exist
+            self.visible=visible
+            self.style=style
+            self.sensitivity=sensitivity
+            self.hittype=hittype
+            self.identity=identity
+        else:
+            print("Geometry does not know how to handle input of type: ",type(name))
+            return(0)
+
+        if force_unit_conversion:
+            self.force_unit_conversion = force_unit_conversion
+        if base_units:
+            self.base_units = base_units
+
 
     def unit_convert_dict(self,base_unit):
         """Return a conversion dict and translation dict that provides the correct unit conversions based on base_unit
@@ -184,14 +218,16 @@ class Geometry():
                 conv_dict['rad']=math.degrees(1.)
                 conv_dict['mrad']=0.001*math.degrees(1.)
                 conv_dict['deg']=1
-            
+
             trans_dict['counts'] = 'counts'
             conv_dict['counts']=1
 
         return(conv_dict,trans_dict)
 
-    def parse_gemc_rot_str(self,string,base_unit):
+    def parse_gemc_rot_str(self,string,base_unit=0):
         """Convert the Rotation GEMC MySQL string with units and ordered statement into a list and a units list and order, based on the base_unit """
+        if base_unit == 0:
+            base_unit = self.base_units
         order=""
         tmp_list= string.split()
         #        m=re.match(' *ordered: *([xyz]+)',string)  # Could use this, but overkill really.
@@ -202,18 +238,21 @@ class Geometry():
             print("Warning: Rotation with only one entry: "+str(tmp_list[0]))
             if not tmp_list[0] == "0":
                 print("But I don't know what to do with it! Setting rotation to zero.")
-                
+
             dims = [0,0,0]
-            dims_units=["deg"]*3
+            dims_units=[base_unit[1]]*3
 
         else:
             dims,dims_units = self.parse_gemc_str(string,base_unit)
-            
-        return dims,dims_units,order
-            
 
-    def parse_gemc_str(self,string,base_unit):
+        return dims,dims_units,order
+
+
+    def parse_gemc_str(self,string,base_unit=0):
         """Convert the GEMC MySQL string with units into a list and a units list based on the base_unit """
+        if base_unit == 0:
+            base_unit = self.base_units
+
         conv,trans=self.unit_convert_dict(base_unit)
         tmp_list= string.split()
         ans=0
@@ -226,7 +265,7 @@ class Geometry():
                 ans=float(p)
                 unit="";
                 dims.append(ans)
-                dims_units.append('cm')  # If there was no unit, make it cm.
+                dims_units.append(base_unit[0])  # If there was no unit, make it base_unit length.
             else:
 #           exec(strunits+"ans="+p)
                 try:
@@ -235,14 +274,18 @@ class Geometry():
                     print("There was a problem parsing: ",p)
                     raise
 
-                if self.debug>2: 
-                    print "Conversion: ",p," to ",num," ",unit
-                if unit == "inches":
-                    unit = "inch"
-                ans = float(num)*conv[unit]
+                if self.force_unit_conversion:
+                    if unit == "inches":
+                        unit = "inch"
+                    ans = float(num)*conv[unit]
 
-                dims.append(ans)
-                dims_units.append(trans[unit])
+                    if self.debug>2:
+                        print "Conversion: ",p," to ",ans," ",trans[unit]
+                    dims.append(ans)
+                    dims_units.append(trans[unit])
+                else:
+                    dims.append(num)
+                    dims_units.append(unit)
 
         return(dims,dims_units)
 
@@ -318,8 +361,8 @@ class Geometry():
         sql+=self.sensitivity+"','"
         sql+=self.hittype+"','"
         sql+=self.identity+"',"
-        sql+=str(self.rmin)+","
-        sql+=str(self.rmax)+","
+        sql+=str(0)+","               # rmin and rmax are not used anywhere, but still in
+        sql+=str(100000)+","          # MySQL definition.
         sql+="now()"
 
         if variation != 0:       # This is for GEMC 2.0 style tables.
@@ -354,17 +397,15 @@ class Geometry():
         pstr+=' '*indent +"      style="+str(self.style)+",\n"
         pstr+=' '*indent +"      sensitivity='"+self.sensitivity+"',\n"
         pstr+=' '*indent +"      hittype='"+self.hittype+"',\n"
-        pstr+=' '*indent +"      identity='"+self.identity+"',\n"
-        pstr+=' '*indent +"      rmin="+str(self.rmin)+",\n"
-        pstr+=' '*indent +"      rmax="+str(self.rmax)+" )\n"
+        pstr+=' '*indent +"      identity='"+self.identity+"')\n"
         return(pstr)
-     
+
     def validate(self):
-        """Attempt to check yourself for valid entries. 
+        """Attempt to check yourself for valid entries.
           If all is OK, then return a 0.
-          If an error is expected, return a integer indicating the field where the first error is expected. 
+          If an error is expected, return a integer indicating the field where the first error is expected.
           Clearly this can only catch the most simple errors, such as formatting problems."""
-          
+
         if not type(self.name) is str:
             return(1)
 
@@ -382,12 +423,12 @@ class Geometry():
                     return(41)
         else:
             return(42)
-        
+
         try:
             self.make_string(self.pos, self.pos_units)
         except:
             return(43)
-        
+
         if type(self.rot) is list or type(self.rot) is tuple:
             if not len(self.rot) == 3:
                 return(5)
@@ -396,7 +437,7 @@ class Geometry():
                     return(51)
         else:
             return(52)
-        
+
         try:
             self.make_string(self.rot, self.rot_units)
         except:
@@ -404,35 +445,35 @@ class Geometry():
 
         if not type(self.col) is str:
             return(6)
-        
+
         if not type(self.g4type) is str:
             return(7)
-        
+
         # The dimensions and dims_units are more difficult to check. The Operations: g4type has none!
         # Try to turn to a string, and hope for the best....
         try:
             self.make_string(self.dimensions, self.dims_units)
         except:
             return(8)
-        
+
         if  not type(self.material) is str:
             return(9)
-        
+
         if not type(self.magfield) is str:
             return(10)
-        
+
         if not type(self.ncopy) is int:
             return(11)
 
         if not type(self.pmany) is int:
             return(12)
-        
+
         if not (self.exist ==0 or self.exist ==1):
             return(13)
-        
+
         if not (self.visible ==0 or self.visible == 1):
             return(14)
-        
+
         if not (self.style ==0 or self.style == 1):
             return(15)
 
@@ -445,17 +486,10 @@ class Geometry():
         if not type(self.identity) is str:
             return(18)
 
-        if not type(self.rmin) is int:
-            return(19)
-
-        if not type(self.rmax) is int:
-            return(20)
-
-        
         return(0)
-        
 
-        
+
+
     def __str__(self):
         """ Return a string with the geometry as a '|' delimited string, as Maurizio's perl scripts """
         outstr =self.name+' | '
@@ -478,11 +512,9 @@ class Geometry():
         outstr+=self.sensitivity+' | '
         outstr+=self.hittype+' | '
         outstr+=self.identity+' '       # No bar on the end of the line.
-#       outstr+=str(self.rmin)+' | '      # GEMC does NOT want the rmin and rman in text files. Don't know why.
-#       outstr+=str(self.rmax)
 
         return(outstr)
-    
+
     def __getitem__(self,i):
         """To treat the Geometry as a dictionary or list..."""
         if i == "name" or i==0:
@@ -518,14 +550,9 @@ class Geometry():
         elif i=="sensitivity" or i==15:
             return(self.sensitivity)
         elif i=="hittype" or i==16:
-            return(self.hittype)       
+            return(self.hittype)
         elif i=="identity" or i==17:
-            return(self.identity) 
-        elif i=="rmin" or i==18:
-            return(self.rmin)
-        elif i=="rmax" or i==19:
-            return(self.rmax)
-        
+            return(self.identity)
 
     def calc_g4_trapezoid(self,front,depth,p1x,p1z,theta1,p2x,p2z,theta2):
         # Utility function.
@@ -539,20 +566,20 @@ class Geometry():
         z1=front
         z2=front+ depth
         #  dz=depth/2
-    
+
         dx1= ( (p2x - p1x) - (z1 - p1z)*math.tan(theta1) + (z1 - p2z)*math.tan( theta2)  )/2.
         dx2= ( (p2x - p1x) - (z2 - p1z)*math.tan(theta1) + (z2 - p2z)*math.tan( theta2)  )/2.
-    
+
         pp1x= p1x + ((z1+z2)/2. - p1z)*math.tan(theta1)     # line through midpoint on low x.
         pp2x= p2x + ((z1+z2)/2. - p2z)*math.tan(theta2)     # line through midpoint high x.
-    
+
         c1x = p2x + (z1 - p2z)*math.tan(theta2) - dx1
         c2x = p2x + (z2 - p2z)*math.tan(theta2) - dx2
-    
+
         cx    = (c1x + c2x)/ 2.
         cz    = front + depth/2.
         thetal = math.atan2( (c2x - c1x),depth )
-    
+
         if dx1 <= 0 or dx2 <= 0 or pp1x > pp2x :
             print "Probable problem with Trapezoid calculation:"
             print "front="+str(front)+"  Depth="+str(depth)
@@ -567,5 +594,5 @@ class Geometry():
             print "cx'=  ",(pp1x+pp2x)/2.
             print "thetal=",thetal
             print "dx1  ="+str(dx1)+"   dx2 ="+str(dx2)
-    
+
         return( cx,cz,thetal,dx1,dx2)
