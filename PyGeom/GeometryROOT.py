@@ -9,8 +9,8 @@ object shape is not implemented. If that is the case, and you need it, please em
 Similarly, it tries to handle the materials. Materials are  only critical if you try to use the ROOT geometry to trace particles. Since mostly
 this class will be  used for rendering pretty pictures, the code automatically substitutes "Aluminum" for each unknown material.
 
-Note that this class requires the ROOT (i.e. PyROOT) package to be installed correctly on your system. 
-It has been tested with ROOT 5.34 and with ROOT 6. 
+Note that this class requires the ROOT (i.e. PyROOT) package to be installed correctly on your system.
+It has been tested with ROOT 5.34 and with ROOT 6.
 """
 #
 import re
@@ -24,7 +24,7 @@ import numpy
 try:
     import ROOT
     #
-    # The following lines are work-arounds. 
+    # The following lines are work-arounds.
     #
     ROOT.PyConfig.StartGuiThread = 'inputhook'    # Allow the OpenGL display to work without a crash.
     #ROOT.TGeoMaterial.__init__._creates = False   # This is supposed to prevent python from crashing on exit,
@@ -54,8 +54,8 @@ class GeometryROOT():
     debug = 0
     _conv_dict=0
     _trans_dict=0
-    
-    def __init__(self,name="GEMC"):
+
+    def __init__(self,geo=None,name="GEMC", description="Python ROOT Geometry Engine for GEMC"):
         """ Initialize the GeometryEngine class, starting up the ROOT.TGeoManager and define materials."""
 
         self._geo_engine=[]  # Make sure this is a clean list, not a global list.
@@ -63,24 +63,37 @@ class GeometryROOT():
         self._mediums={}
         self._shapes={}
         self._volumes={}
-        self._translations={} 
+        self._translations={}
 
-        self._geom = ROOT.TGeoManager(name,"Python ROOT Geometry Engine for GEMC")
-        self._mats_table = self._geom.GetElementTable()
-        self._geom.SetVisOption(0)
-        # Get a unit conversion table from ghe Geometry class. Yes, it needs a minimal init.
-        self._conv_dict,self._trans_dict = Geometry(name="convert",g4type="").unit_convert_dict("cm deg")
+        # Get a unit conversion table from the Geometry class. Yes, it needs a minimal init.
+        if geo == None or len(geo)==0:
+            self._conv_dict,self._trans_dict = Geometry(name="convert",g4type="").unit_convert_dict("cm deg")
+            self._geom = ROOT.TGeoManager(name,description)
+            self._mats_table = self._geom.GetElementTable()
+            self._geom.SetVisOption(0)
+
+        else:
+            self._conv_dict,self._trans_dict = geo[0].unit_convert_dict("cm deg")
+            self._geom = ROOT.TGeoManager(geo.get_name(),geo.get_description())
+            self._mats_table = self._geom.GetElementTable()
+            self._geom.SetVisOption(0)
+
+            if geo.find_volume('root') == None:
+                if self.debug >0:
+                    print "No root volume found, creating one."
+                self.create_root_volume()
+            self.build_volumes(geo)
         #
         # Setup the materials to be used.
         #
         # self.Create_Mats()
         atexit.register(self.__atexit__)
-    
+
     def __atexit__(self):
         """ Try to clean up after ourselves. """
         print "Calling cleanup crew."
         del self._geom  # -- This doesn't work. ROOT has already badly cleaned this with the hook.
-        
+
     def close_geometry(self):
         """Close the ROOT GeometryManager:
         Closing geometry implies checking the geometry validity, fixing shapes
@@ -88,31 +101,31 @@ class GeometryROOT():
         voxelizing all volumes, counting the total number of physical nodes and
         registering the manager class to the browser. """
         self._geom.CloseGeometry()
-        
-        
-    def find_element(self,elem):    
+
+
+    def find_element(self,elem):
         """Wrapper to ROOT.TGeoManager.GetElementTable().FindElement() to avoid crashes when element not found. """
         try:
            stuff = self._mats_table.FindElement(elem)
         except:
             print("Error finding the element: "+str(elem)+" please check your code.")
             return(None)
-        
+
         if stuff is None:
             print("Could not find the element: "+str(elem)+", check the periodic table.")
             return(None)
-            
+
         return(stuff)
 
     def add_element(self,matname,elem,fract):
         """ Wrapper to ROOT.TGeoMixture().AddElement() to avoid crashes and simplify usage. """
-    
+
         if type(elem) is str:
             elem = self.find_element(elem)  # Overwrite the elem with the ROOT TElement object, not the name.
         elif type(elem) is not type(ROOT.TGeoElement()):
             print("There is something wrong with the 2nd argument to add_element: "+str(elem))
             return(None)
-           
+
         if type(matname) is str:
             if matname in self._materials:
                 self._materials[matname].AddElement(elem,fract)
@@ -123,10 +136,10 @@ class GeometryROOT():
         else:
             print("There is something wrong with the 1st argument to add_element: "+str(matname))
             return(None)
-        
-        
-    
-        
+
+
+
+
     def find_material(self,material,trans=0):
         """ Find the material (actually medium in ROOT speak) for a volume.
             Because transparency is linked with the material in ROOT, a new
@@ -135,25 +148,25 @@ class GeometryROOT():
         g = 1.
         cm3=1.
         med_index=len(self._mediums)
-        
+
         if material=="Component":
             return(0)
-        
-        
+
+
         if trans:
             matname= material+"_"+str(trans/10)
         else:
             matname= material
-            
+
         if matname in self._mediums:
             return(self._mediums[matname])
-        
+
         #
         # We didn't find it, so let's build it.
         #
         if self.debug > 1:
             print "Creating material: "+ matname
-        
+
         for geo in self._geo_engine:
             for mmat in geo._Materials:
                 if self.debug > 2:
@@ -173,39 +186,39 @@ class GeometryROOT():
 #                            print "Adding material to mixture: ",name," with density: ",cc[1]
                             self._materials[matname].AddElement(Rmat,cc[1])
 
-                    self._mediums[matname] = ROOT.TGeoMedium(matname,med_index, self._materials[matname])       
+                    self._mediums[matname] = ROOT.TGeoMedium(matname,med_index, self._materials[matname])
                     self._materials[matname].SetTransparency(trans)
                     return( self._mediums[matname])
-        
+
         if self.debug > 2:
             print("Not found yet, see how to make one of those.")
-                  
+
         if material == "Vacuum":
-            
+
             self._materials[matname] = ROOT.TGeoMaterial(matname, 0,0,0)
             if trans == 0:
                 trans = 80
 
         elif material == "Air":
-            
+
             self._materials[matname] = ROOT.TGeoMixture(matname,2,1.29*g/cm3)
             self._materials[matname].AddElement(self._mats_table.FindElement("N"), 0.7)
             self._materials[matname].AddElement(self._mats_table.FindElement("O"), 0.3)
 
         elif material == "Fe" or material == "Iron" or material == "G4_Fe":
-            
+
             self._materials[matname] =  ROOT.TGeoMaterial("Fe",55.845,26,7.87);
 
         elif material == "Cu" or material == "Copper" or material == "G4_Cu":
-            
+
             self._materials[matname] =  ROOT.TGeoMaterial("Cu",63.546,29,8.96);
-            
+
         elif material == "Quartz" or material == "Silicon" or material == "G4_Si" or material == "Si":
-            
+
             self._materials[matname] =  ROOT.TGeoMaterial("Si",63.546,29,8.96);
 
         elif material == "StainlessSteel":
-        
+
                 self._materials[matname]=ROOT.TGeoMixture(matname,5, 8.02*g/cm3)
                 self._materials[matname].AddElement(self._mats_table.FindElement("Mn"), 0.02)
                 self._materials[matname].AddElement(self._mats_table.FindElement("Si"), 0.01)
@@ -214,7 +227,7 @@ class GeometryROOT():
                 self._materials[matname].AddElement(self._mats_table.FindElement("Fe"), 0.68)
 
         elif material == "G4_Concrete":
-        
+
                 components=[("G4_H",0.01),("G4_C",0.001),("G4_O",0.529107),("G4_Na",0.016),("G4_Mg",0.002),
                     ("G4_Al",0.033872),("G4_Si",0.337021),("G4_K",0.013),("G4_Ca",0.044),("G4_Fe",0.014)]
 
@@ -229,44 +242,44 @@ class GeometryROOT():
                 self._materials[matname].AddElement(self._mats_table.FindElement("K"),  0.013)
                 self._materials[matname].AddElement(self._mats_table.FindElement("Ca"), 0.044)
                 self._materials[matname].AddElement(self._mats_table.FindElement("Fe"), 0.014)
-                
+
         elif material == "G4_W" or material == "Tungsten":
-            
+
             self._materials[matname] =  ROOT.TGeoMaterial("W",183.84,74,19.25*g/cm3);
 
         elif material == "LeadTungsten":
-            
+
             self._materials[matname]= ROOT.TGeoMixture(matname, 3, 8.28*g/cm3)
             self._materials[matname].AddElement(self._mats_table.FindElement("Pb"),1);
             self._materials[matname].AddElement(self._mats_table.FindElement("W"), 1);
             self._materials[matname].AddElement(self._mats_table.FindElement("O"), 4);
 
         elif material == "Scintillator" or material=="ScintillatorB" or material=="scintillator":
-            
+
 #             self._materials[matname]= ROOT.TGeoMixture(matname, 2, 1.032*g/cm3)
 #             self._materials[matname].AddElement(self._mats_table.FindElement("C"),9);
 #             self._materials[matname].AddElement(self._mats_table.FindElement("H"), 10);
-            
+
             self._materials[matname]= ROOT.TGeoMixture(matname, 2, 1.032*g/cm3)
             self.add_element(self._materials[matname], "C", 9)
             self.add_element(matname, "H", 10)
-            
+
 
         elif material == "Aluminum":
 
             self._materials[matname]= ROOT.TGeoMaterial(matname,26.98,13,2.7);    # A,Z,rho
-        
+
         else:
-            if self.debug: 
+            if self.debug:
                 print "OOPS, the material: " + material + " has not yet been defined in Python world. ",
                 print "I'll pretend it is Aluminum..."
             return(self.find_material("Aluminum", trans))
 
-        self._mediums[matname] = ROOT.TGeoMedium(matname,med_index, self._materials[matname])       
+        self._mediums[matname] = ROOT.TGeoMedium(matname,med_index, self._materials[matname])
         self._materials[matname].SetTransparency(trans)
         return( self._mediums[matname])
-        
-        
+
+
     def create_root_volume(self,rmaterial="Vacuum",size=[1000,1000,1000],visible=0):
         """Setup the mother of all volumes, the hall or 'root' volume everything else goes into. """
         vacmat = self.find_material("Vacuum")
@@ -274,11 +287,11 @@ class GeometryROOT():
         self._volumes["root"].SetLineColor(18)  # ROOT light gray color.
         self._geom.SetTopVolume(self._volumes["root"])
         self._geom.SetTopVisible(visible)
-        
+
     def create_color_for_root(self,color):
-        """Root has a 'color index', the rest of the world has RGB values. Create a new color with 
+        """Root has a 'color index', the rest of the world has RGB values. Create a new color with
         the specified RGBa value string. """
-        
+
         # The following regex captures the 3 color groups + the optional alpha channel.
         m = re.match("#?([A-F0-9][A-F0-9])([A-F0-9][A-F0-9])([A-F0-9][A-F0-9])([0-9]?)",color,re.I)
         if not m:
@@ -289,21 +302,21 @@ class GeometryROOT():
         G = int(m.group(2),16)
         B = int(m.group(3),16)
         Alpha = int(m.group(4))
-        
+
         newcol=ROOT.TColor(self._color_idx,R/255.,G/255.,B/255.)
         newcol.SetAlpha(Alpha)
 
         return(self._color_idx)
-    
+
     def find_root_color(self,color):
         """Return the ROOT color, or create it if not found. color is an #rgb string. """
 
         if not color[0]=="#":
             color="#"+color
-            
+
         col_found= ROOT.TColor.GetColor(color)
         return(col_found)
-    
+
     def get_color_alpha(self,color):
         """ Extract the color and the alpha (0-9) for the color. Returns ROOT color and Alpha"""
                 # The following regex captures the 3 color groups + the optional alpha channel.
@@ -316,7 +329,7 @@ class GeometryROOT():
             alpha = int(m.group(2))
         else:
             alpha=0
-            
+
         return color,alpha
 
     def convert(self,value,unit,new_unit):
@@ -328,7 +341,7 @@ class GeometryROOT():
             conv_dict,_  = Geometry(name="convert",g4type="",dimensions="").unit_convert_dict(new_unit)
             new_value = value*conv_dict[unit]
             return new_value
-                
+
     def build_volumes(self,geo,mother="root"):
         """Take the GeometryEngine geo argument and build a tree of ROOT volumes from it.
            The tree starts at the geo volume mother and then recureses down for each daughter.
@@ -339,19 +352,19 @@ class GeometryROOT():
         if not isinstance(geo,GeometryEngine):
             print "The argument to Build_root_volumes MUST be a GeometryEngine object"
             return
-        
+
         self._geo_engine.append(geo)  # Store the GeometryEngine in case needed later.
         self._geo_engine_current = geo
-        
-        # 
-        # Check to see if the "mother" exists. 
+
+        #
+        # Check to see if the "mother" exists.
         # If not found,
-        #   If "mother"="root", then 
+        #   If "mother"="root", then
         #       create a root volume.
-        #   else: 
+        #   else:
         #       look for mother in file and create it as master.
         if not self._volumes.has_key(mother):
-            if mother == "root":                # Place the root    
+            if mother == "root":                # Place the root
                 self.create_root_volume()
             else:
                 root_vol = geo.find_volume(mother)
@@ -361,33 +374,33 @@ class GeometryROOT():
                 else:
                     if not self._volumes.has_key("root"):
                         self.create_root_volume()
-                        
+
                     self.place_volume(root_vol, "root")
-                    
-        # We need to go through the geometry and first place all the geometries that are 
-        # in the mother of geo in our mother. 
+
+        # We need to go through the geometry and first place all the geometries that are
+        # in the mother of geo in our mother.
         # By GEMC definition the geo mother = "root"
         #
-        
+
         objl = geo.find_children(mother) # Return list of Geometry object with mother as mother.
-        
+
         if objl is None or type(objl) is int:
             if self.debug>4:
                 print "I could not find volumes with '"+mother+"' for mother volume. "
             return
-        
+
         if self.debug > 1:
             sys.stdout.write("build_volumes: placing in '"+mother+"' volumes: ['")
             for x in objl:
                 sys.stdout.write(x.name+"','")
             print "']"
-            
+
         for vol in objl:
             self.place_volume(vol,mother)
             self.build_volumes(geo,vol.name)   # Recurse to find the children of this volume and build them.
-        
+
     def compute_combi_trans(self,name,vector,rotation):
-        """Compute the TGeoCombiTrans for the geometry in geo_vol 
+        """Compute the TGeoCombiTrans for the geometry in geo_vol
            A TGeoCombiTrans is considered to be a rotation of the object, followed by a translation.
            The actual rotation we store is an inverse rotation....
            The arguments here are a Vector (expected in 'cm') and a Rotation (in 'radians') """
@@ -400,36 +413,36 @@ class GeometryROOT():
             return
 
         rotate  =  ROOT.TGeoRotation(name+"_rot")
-        
+
         (theta,phi,psi)= rotation.GetXYZ()
-        
+
         rotate.RotateZ(-self.convert(psi  ,"rad","deg"))
         rotate.RotateY(-self.convert(phi  ,"rad","deg"))
         rotate.RotateX(-self.convert(theta,"rad","deg"))
-        
+
         transrot = ROOT.TGeoCombiTrans(vector.x(),
                                        vector.y(),
                                        vector.z(),
                                        rotate)
         return(transrot)
 
-    
+
     def compute_trans_vector(self,geo_vol):
         """ Return a Rotation.Vector object from the position """
-        
+
         if type(geo_vol.pos_units) is str:
             unit=geo_vol.pos_units
             geo_vol.pos_units=[unit,unit,unit]
-                        
+
         vec = Vector([self.convert(geo_vol.pos[0],geo_vol.pos_units[0],"cm"),
                       self.convert(geo_vol.pos[1],geo_vol.pos_units[1],"cm"),
                       self.convert(geo_vol.pos[2],geo_vol.pos_units[2],"cm")])
         return vec
-    
-    
+
+
     def compute_trans_rotation(self,geo_vol):
         """ Compute the Rotation from the geo_vol rot """
-        
+
         if type(geo_vol.rot_units) is str:
             unit=geo_vol.rot_units
             geo_vol.rot_units=[unit,unit,unit]
@@ -440,14 +453,14 @@ class GeometryROOT():
 
         if len(geo_vol.rot_units) < 3:
             print("Incomplete rotation units for ",str(geo_vol))
-            
+
         if geo_vol.rot_order == "" or geo_vol.rot_order == "xyz":
 
             rotate = Rotation()
             rotate = rotate.rotateX(self.convert(geo_vol.rot[0],geo_vol.rot_units[0],"rad"))
             rotate = rotate.rotateY(self.convert(geo_vol.rot[1],geo_vol.rot_units[1],"rad"))
             rotate = rotate.rotateZ(self.convert(geo_vol.rot[2],geo_vol.rot_units[2],"rad"))
-  
+
         #
         # NOTE: This should be rewritten to parsse the xyz string, and then call the appropriate rotations
         #
@@ -491,16 +504,16 @@ class GeometryROOT():
             raise NameError('===== OOPS ==== I do not know about a ',geo_vol.rot_order,' rotation. Sorry. ')
 
         return(rotate)
-    
-    
+
+
     def compute_combi_trans_2(self,geo_vol):
-        """Compute the TGeoCombiTrans for the geometry in geo_vol 
+        """Compute the TGeoCombiTrans for the geometry in geo_vol
            A TGeoCombiTrans is considered to be a rotation +  translation."""
         rotate  =  ROOT.TGeoRotation(geo_vol.name+"_rot")
         if type(geo_vol.rot_units) is str:
             unit=geo_vol.rot_units
             geo_vol.rot_units=[unit,unit,unit]
-            
+
         rotate.RotateX(-self.convert(geo_vol.rot[0],geo_vol.rot_units[0],"deg"))
         rotate.RotateY(-self.convert(geo_vol.rot[1],geo_vol.rot_units[1],"deg"))
         rotate.RotateZ(-self.convert(geo_vol.rot[2],geo_vol.rot_units[2],"deg"))
@@ -508,22 +521,22 @@ class GeometryROOT():
         if type(geo_vol.pos_units) is str:
             unit=geo_vol.pos_units
             geo_vol.pos_units=[unit,unit,unit]
-            
+
         transrot = ROOT.TGeoCombiTrans(self.convert(geo_vol.pos[0],geo_vol.pos_units[0],"cm"),
                                        self.convert(geo_vol.pos[1],geo_vol.pos_units[1],"cm"),
                                        self.convert(geo_vol.pos[2],geo_vol.pos_units[2],"cm"),
                                        rotate)
         return(transrot)
-    
+
     def get_volume_shape(self,geo_vol):
         """From the geo_vol description strings, return a new TGeoVolume shape.
            For Operations, the shape is computed from previously stored shapes and translation."""
-        
+
         if geo_vol.g4type == "Box":
             if type(geo_vol.dims_units) is str:
                 unit = geo_vol.dims_units
                 geo_vol.dims_units=[unit,unit,unit]
-                
+
             newgeo_shape = ROOT.TGeoBBox(geo_vol.name+"_shape",
                                         self.convert(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm"),
                                         self.convert(geo_vol.dimensions[1],geo_vol.dims_units[1],"cm"),
@@ -532,7 +545,7 @@ class GeometryROOT():
             if type(geo_vol.dims_units) is str:
                 unit = geo_vol.dims_units
                 geo_vol.dims_units=[unit,unit,unit]
-            
+
             if len(geo_vol.dimensions) == 3 or geo_vol.dimensions[3]<=0. and self.convert(geo_vol.dimensions[4],geo_vol.dims_units[4],"deg")>=360. :
                 newgeo_shape = ROOT.TGeoTube(geo_vol.name+"_shape",
                                         self.convert(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm"),
@@ -540,10 +553,10 @@ class GeometryROOT():
                                         self.convert(geo_vol.dimensions[2],geo_vol.dims_units[2],"cm"))
 
             else:
-                
+
                 phi_start = self.convert(geo_vol.dimensions[3],geo_vol.dims_units[3],"deg")
                 phi_end   = phi_start + self.convert(geo_vol.dimensions[4],geo_vol.dims_units[4],"deg")
-            
+
                 # print("Tube: Phi_start = "+str(phi_start)+"  Phi_end = "+str(phi_end))
 
                 newgeo_shape = ROOT.TGeoTubeSeg(geo_vol.name+"_shape",
@@ -552,18 +565,18 @@ class GeometryROOT():
                                         self.convert(geo_vol.dimensions[2],geo_vol.dims_units[2],"cm"),
                                         phi_start,
                                         phi_end)
- 
-                
+
+
         elif geo_vol.g4type == "Sphere":
             if type(geo_vol.dims_units) is str:
                 print "We have a problem. Parallelepiped "+ geo_vol.name+" has bad units = string."
-                
+
             start_phi = self.convert(geo_vol.dimensions[2],geo_vol.dims_units[2],"deg")
             delta_phi = self.convert(geo_vol.dimensions[3],geo_vol.dims_units[3],"deg")
             end_phi = start_phi + delta_phi
             start_tht = self.convert(geo_vol.dimensions[4],geo_vol.dims_units[4],"deg")
             delta_tht = self.convert(geo_vol.dimensions[5],geo_vol.dims_units[5],"deg")
-            end_tht = start_tht + delta_tht                
+            end_tht = start_tht + delta_tht
 
             newgeo_shape = ROOT.TGeoSphere(geo_vol.name+"_shape",
                                         self.convert(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm"),
@@ -575,8 +588,8 @@ class GeometryROOT():
         elif geo_vol.g4type == "Parallelepiped":
             if type(geo_vol.dims_units) is str:
                 print "We have a problem. Parallelepiped "+ geo_vol.name+" has bad units = string."
-                
-            
+
+
             newgeo_shape = ROOT.TGeoPara(geo_vol.name+"_shape",
                                         self.convert(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm"),
                                         self.convert(geo_vol.dimensions[1],geo_vol.dims_units[1],"cm"),
@@ -584,7 +597,7 @@ class GeometryROOT():
                                         self.convert(geo_vol.dimensions[3],geo_vol.dims_units[3],"deg"),
                                         self.convert(geo_vol.dimensions[4],geo_vol.dims_units[4],"deg"),
                                         self.convert(geo_vol.dimensions[5],geo_vol.dims_units[5],"deg"))
-                                         
+
         elif geo_vol.g4type == "Trd":
             if type(geo_vol.dims_units) is str:
                 unit = geo_vol.dims_units
@@ -648,19 +661,19 @@ class GeometryROOT():
             if type(geo_vol.dims_units) is str:
                 unit = geo_vol.dims_units
                 geo_vol.dims_units=[unit]*3
-                
+
             newgeo_shape = ROOT.TGeoParaboloid(geo_vol.name+"+shape",
                                     self.convert(geo_vol.dimensions[1],geo_vol.dims_units[1],"cm"), # Rlo
                                     self.convert(geo_vol.dimensions[2],geo_vol.dims_units[2],"cm"), # Rhi
                                     self.convert(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm")) # Dz
-        
+
         elif geo_vol.g4type == "Ellipsoid":
             if type(geo_vol.dims_units) is str:
                 unit = geo_vol.dims_units
                 geo_vol.dims_units=[unit]*5
             #
             # This one is a bit tricky. There is no Ellipsoid in ROOT world, so we will need to approximate
-            # it by creating a sphere, which is then stretched in x,y to right shape, and clipped at the 
+            # it by creating a sphere, which is then stretched in x,y to right shape, and clipped at the
             # ends by a box. This should have been WAY easier....
             #
             dx    = self.convert(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm")
@@ -668,38 +681,38 @@ class GeometryROOT():
             radius= self.convert(geo_vol.dimensions[2],geo_vol.dims_units[2],"cm")
             z1    = self.convert(geo_vol.dimensions[3],geo_vol.dims_units[3],"cm")
             z2    = self.convert(geo_vol.dimensions[4],geo_vol.dims_units[4],"cm")
-        
+
             sx = dx/radius
             sy = dy/radius
             sz = 1
-            
+
             if (z1 == 0 and z2 == 0) or z1 >= z2:
                 z1 = -radius
-                z2 = +radius              
-                        
+                z2 = +radius
+
             tmp_sph  = ROOT.TGeoSphere(0,radius)
             tmp_scale= ROOT.TGeoScale("",sx,sy,sz)
             tmp_shape =ROOT.TGeoScaledShape(geo_vol.name+"_ellip",tmp_sph,tmp_scale)
             #
             # This gives a stretched sphere = ellipsoid.
             # Now cut the top and bottom....
-            # 
+            #
             z = 0.5*(z1+z2)
             dz = 0.5*(z2 - z1)
             tmp_cut_box = ROOT.TGeoBBox(geo_vol.name+"_cutbox",dx,dy,dz,numpy.array([0.,0.,z]))
             tmp_bool_node = ROOT.TGeoIntersection(tmp_shape,tmp_cut_box,0,0)
             newgeo_shape = ROOT.TGeoCompositeShape(geo_vol.name+"_shape",tmp_bool_node)
-            
+
         elif geo_vol.g4type == "Cons":
             if type(geo_vol.dims_units) is str:
                 print "We have a problem. Cons "+ geo_vol.name+" has bad units = string."
 #
 # Note the arguments have different order from GEANT4.
-# 
+#
             start_phi = self.convert(geo_vol.dimensions[5],geo_vol.dims_units[5],"deg")
             delta_phi = self.convert(geo_vol.dimensions[6],geo_vol.dims_units[6],"deg")
             end_phi = start_phi + delta_phi
-  
+
             newgeo_shape= ROOT.TGeoConeSeg(geo_vol.name+"_shape",
                                         self.convert(geo_vol.dimensions[4],geo_vol.dims_units[4],"cm"),
                                         self.convert(geo_vol.dimensions[0],geo_vol.dims_units[0],"cm"),
@@ -720,17 +733,17 @@ class GeometryROOT():
             start_phi = self.convert(geo_vol.dimensions[0],geo_vol.dims_units[0],"deg")
             delta_phi = self.convert(geo_vol.dimensions[1],geo_vol.dims_units[1],"deg")
             nplanes   = int(geo_vol.dimensions[2])
-            
+
             if self.debug>2:
                 print("Polycone: s_phi="+str(start_phi)+" delta_phi="+str(delta_phi)+" nplanes="+str(nplanes)+" name="
                       +geo_vol.name)
-            
+
             newgeo_shape = ROOT.TGeoPcon(geo_vol.name+"_shape",start_phi,delta_phi,nplanes)
 
             for np in range(nplanes):
                 rmin = self.convert(geo_vol.dimensions[3 + 0*nplanes + np],geo_vol.dims_units[3 + 0*nplanes + np],"cm")
                 rmax = self.convert(geo_vol.dimensions[3 + 1*nplanes + np],geo_vol.dims_units[3 + 1*nplanes + np],"cm")
-                z    = self.convert(geo_vol.dimensions[3 + 2*nplanes + np],geo_vol.dims_units[3 + 2*nplanes + np],"cm")               
+                z    = self.convert(geo_vol.dimensions[3 + 2*nplanes + np],geo_vol.dims_units[3 + 2*nplanes + np],"cm")
                 newgeo_shape.DefineSection(np,z,rmin,rmax)
                 if self.debug>2:
                     print("rmax = "+str(rmax)+" rmin= "+str(rmin)+"  z= "+str(z))
@@ -738,7 +751,7 @@ class GeometryROOT():
         elif geo_vol.g4type == "Pgon" or  geo_vol.g4type == "Polyhedra":
             if type(geo_vol.dims_units) is str:
                 raise NameError("We have a problem. Polycone "+geo_vol.name+" has bad units = string. ")
-            
+
             start_phi = self.convert(geo_vol.dimensions[0],geo_vol.dims_units[0],"deg")
             delta_phi = self.convert(geo_vol.dimensions[1],geo_vol.dims_units[1],"deg")
             nsides    = int(geo_vol.dimensions[2])
@@ -749,7 +762,7 @@ class GeometryROOT():
             for np in range(nplanes):
                 rmin = self.convert(geo_vol.dimensions[4 + 0*nplanes + np],geo_vol.dims_units[3 + 0*nplanes + np],"cm")
                 rmax = self.convert(geo_vol.dimensions[4 + 1*nplanes + np],geo_vol.dims_units[3 + 1*nplanes + np],"cm")
-                z    = self.convert(geo_vol.dimensions[4 + 2*nplanes + np],geo_vol.dims_units[3 + 2*nplanes + np],"cm")               
+                z    = self.convert(geo_vol.dimensions[4 + 2*nplanes + np],geo_vol.dims_units[3 + 2*nplanes + np],"cm")
                 newgeo_shape.DefineSection(np,z,rmin,rmax)
 
 
@@ -765,7 +778,7 @@ class GeometryROOT():
             # rotated relative to this origin, and then the addition or subtraction takes place. Then the
             # final result is translated to the final location + rotation.
             # The upshot is that the positioning of the FIRST object must be ignored, if we follow the
-            # GEANT4 rules, which we are bound to here. 
+            # GEANT4 rules, which we are bound to here.
             # GEMC has the added feature that you can have BOTH volumes specified relative to the coordinates
             # of the mother volume. It achieves this with a calculation. You can tell GEMC to do this with
             # an @ right after the "Operation:" statement (i.e. "Operation:@")
@@ -773,9 +786,9 @@ class GeometryROOT():
             # then relative to the origin of the MOTHER volume, i.e. the original center. For GEMC the
             # final positioning is relative to the center of the FIRST object.
             # Because the combo object can be put into another combo, we cannot get the same behavior
-            # by simply placing the new shape at trans = -trans_1 + trans_final  
+            # by simply placing the new shape at trans = -trans_1 + trans_final
             # We need to follow the GEMC calculation.
-            
+
             match=re.match("Operation:([~@])?\W*(\w*)\W*([*+-])\W*(\w*)\W*",geo_vol.g4type) # * must be first in char list: [*+-]
             special = match.group(1)
             shape1_name = match.group(2)
@@ -783,10 +796,10 @@ class GeometryROOT():
             shape2_name = match.group(4)
             if self.debug >4:
                 print("Operation found: " + geo_vol.g4type + " = '" + shape1_name + "' " + operation + " '"+ shape2_name+"'")
-            
+
 #
 # The following is effectively a recursive call. If the lines for placing the required shapes had not
-# been processed yet, then process them now. 
+# been processed yet, then process them now.
 # Find the volume description line from the GeometryEngine, and place the volume.
 # Since these are most likely "Component" volumes, they will not actually be placed, but the
 # shape and translation will be created in "Place_Volume()
@@ -794,35 +807,35 @@ class GeometryROOT():
             if not shape1_name in self._shapes.keys():
                 f_geo = self._geo_engine_current.find_volume(shape1_name) # The volume isn't there yet. Find it and place it.
                 self.place_volume(f_geo) # place in same mother.
-                
+
             if not shape2_name in self._shapes.keys():
                 f_geo = self._geo_engine_current.find_volume(shape2_name) # The volume isn't there yet. Find it and place it.
                 self.place_volume(f_geo) # place in same mother.
-             
-            shape1 = self._shapes[shape1_name]    
+
+            shape1 = self._shapes[shape1_name]
             shape2 = self._shapes[shape2_name]
             #  transrot2 = self.compute_combi_trans(self._geo_engine_current.find_volume(shape2_name))
 
-            trans1,rot1 = self._translations[shape1_name]            
+            trans1,rot1 = self._translations[shape1_name]
             trans2,rot2 = self._translations[shape2_name]
             transrot1=0
 
-            if special == "@": 
+            if special == "@":
 
                 if self.debug>4:
                         print("Special operation: "+str(special))
-                              
+
                 net_trans = trans2 - trans1
                 net_trans_rot = rot1*net_trans
-#                 
+#
                 net_rot = (rot2*rot1.I)
 #                net_rot = (rot1*rot2.I).I
-                transrot2 = self.compute_combi_trans(geo_vol.name, net_trans_rot, net_rot)  
-                
+                transrot2 = self.compute_combi_trans(geo_vol.name, net_trans_rot, net_rot)
+
             else:
-                transrot2 = self.compute_combi_trans(shape2_name,trans2,rot2) 
-                     
-          
+                transrot2 = self.compute_combi_trans(shape2_name,trans2,rot2)
+
+
             if operation == "-":
                 opshape = ROOT.TGeoSubtraction(shape1,shape2,transrot1,transrot2)
             elif operation == "+":
@@ -833,7 +846,7 @@ class GeometryROOT():
                 print "WARNING: Operation "+operation+" is not implemented."
 
             newgeo_shape = ROOT.TGeoCompositeShape(geo_vol.name+"_shape",opshape)
-                
+
 
         elif re.match("CopyOf .*",geo_vol.g4type):
             match = re.match("CopyOf (.*)",geo_vol.g4type)
@@ -853,33 +866,33 @@ class GeometryROOT():
 
         return(newgeo_shape)
 
- 
+
     def place_volume(self,geo_vol,mother=0):
         """ Place the Geometry object geo_vol onto the ROOT geometry tree under the volume 'mother' """
-        
+
         if not isinstance(geo_vol,Geometry):
             print "We can only build Geometry objects and argument is not a Geometry"
             return
-        
+
         if not mother:
             mother=geo_vol.mother    # If mother is not explicit, get it from the geometry line.
-                       
+
         try:
             mother_vol = self._volumes[mother]
         except KeyError:
             print "Error -- Mother volume: "+mother+" is not found, so cannot build "+geo_vol.name
             return
-        
+
         if geo_vol.name in self._shapes.keys():
             if self.debug > 7:
                 print "We have done the shape for '"+geo_vol.name+"' already. Skip."
             return
-        
+
         color,transp  = self.get_color_alpha(geo_vol.col)
         transp= transp*10
         if geo_vol.style == 0 and transp<70:     # Outline only, instead make semi transparent.
             transp= 70
-                        
+
         medium = self.find_material(geo_vol.material,transp)
 
         # Make the translation and the rotation.
@@ -891,7 +904,7 @@ class GeometryROOT():
 
         if geo_vol.exist == 0:  # I don't exist, so don't bother.
             return
-        
+
         if self.debug > 1:
             print("Mother: "+ mother+ " Volume: "+ geo_vol.name + "  Type:" + geo_vol.g4type + "  Material:"+geo_vol.material + " Vis:"+str(geo_vol.visible))
             print("    dimension:"+str(geo_vol.dimensions) + " units:" + str(geo_vol.dims_units))
@@ -900,7 +913,7 @@ class GeometryROOT():
             print("    color: "+str(color))
             print ("")
         newgeo_shape = self.get_volume_shape(geo_vol)
- 
+
         if newgeo_shape == 0 or newgeo_shape is None:
             if self.debug:
                 print "Cannot place this volume on the stack."
@@ -908,7 +921,7 @@ class GeometryROOT():
 
         if self.debug > 6:
             print "Put '"+geo_vol.name+"' put on shapes table "
-            
+
         if medium == 0:
             if self.debug > 5:
                 print "Component volume '"+geo_vol.name+"' put on shapes table only"
@@ -918,11 +931,11 @@ class GeometryROOT():
             newgeo.SetVisibility(geo_vol.visible)
             self._volumes[geo_vol.name] = newgeo
             mother_vol.AddNode(newgeo,1,transrot)
-    
+
     def Draw(self,option=""):
         """For ROOT standard compatibility, also implement this with a capital D. This simply calls draw()"""
-        return(self.draw(option))   
-                    
+        return(self.draw(option))
+
     def draw(self,option=""):
         """ draw an wireframe version of the objects """
         topvol = self._geom.GetTopVolume()
@@ -930,24 +943,24 @@ class GeometryROOT():
         self._geom.SetTopVisible(0)
         topvol.SetVisibility(0)
         topvol.Draw(option)
-        
-    
+
+
     def __str__(self):
         """ Print information about this class """
         strout = "GeometryROOT object, containing:\n"
         for name,vol in self._volumes.iteritems():
             match = re.match('<ROOT\.(.*) .*',str(vol.GetShape()))
             shape_name = match.group(1)
- 
+
             match = re.match('.*\(\"(.*)\"\) .*',str(vol.GetMedium()))
             medium_name = match.group(1)
-            strout+= name+" rname:" + vol.GetName() + " type: " + shape_name + " medium:" + str(vol.GetMedium())+"\n"   
-        
+            strout+= name+" rname:" + vol.GetName() + " type: " + shape_name + " medium:" + str(vol.GetMedium())+"\n"
+
         return(strout)
-    
+
     def interact(self,local_vars=None,init_view=1):
         """This wicked cool bit of code calls the Python environment, so you can mess with the geometry
-            from the command line."""      
+            from the command line."""
 
         # This used to work, but not as well as the code below.
         #     context = globals().copy()
@@ -957,7 +970,7 @@ class GeometryROOT():
             raise None
         except:
             frame = sys.exc_info()[2].tb_frame.f_back
-            
+
         # evaluate commands in current context
         context = frame.f_globals.copy()
         context.update(frame.f_locals)
@@ -971,10 +984,8 @@ class GeometryROOT():
         print ""
         print "You can now access the geometry through the ROOT browser"
         print "You are in a Python shell. Exit by crtl-D (EOF)."
-        
+
         if init_view:
             shell.push("browser=ROOT.TBrowser()")
             shell.push("rr.draw('ogl')")
         shell.interact()
-
-        

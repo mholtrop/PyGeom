@@ -38,6 +38,7 @@ class GeometryEngine():
         user = "user"          # String. Name of the user in the DB.
         passwd = "passwd"      # String. Password for user.
         database="dbname"      # String. Name of the database to connect to.
+        force_unit_conversion=False # Force converting units to base_units=["cm","rad"]
         gemcversion=2          # Int.    Version of GEMC to write tables for. Default: 2
     )
     """
@@ -57,18 +58,28 @@ class GeometryEngine():
     table_variation=0
     table_id = 0
     GemcVersion=0
+    force_unit_conversion=False
+    base_units = ["cm","rad"]
     debug=0
 
 # Special controls. Should not be needed.
     _always_commit = 0 # Set to 1 to commit immediately after each sql_execute()
 
-    def __init__(self,detector,variation="original",table_id=1,db_host=0,user=0,passwd=0,database=0,gemcversion=2):
+    def __init__(self,detector,variation="original",
+                 table_id=1,
+                 db_host=0,
+                 user=0,
+                 passwd=0,
+                 database=0,
+                 force_unit_conversion=False,
+                 gemcversion=2):
         """ Does nothing. Can print a hello """
         # print "Init the GeometryEngine "
         self._Detector = detector
         self.GemcVersion=gemcversion
         self.table_variation=variation
         self.table_id = table_id
+        self.force_unit_conversion=force_unit_conversion
         self._Geometry=[]  # Must be done here, otherwise [] will leak across instances.
         self._Parameters=[]
         self._Sensitive_Detector=[]
@@ -92,6 +103,12 @@ class GeometryEngine():
         GeometryEngine objects with the same database as another. """
         self._DataBase = db
         self._cursor = self._DataBase.cursor()
+
+    def get_name(self):
+        return(self._Detector)
+
+    def get_description(self):
+        return("Geometry for "+self._Detector+" variation: "+self.table_variation)
 
     def add(self,geom):
         """ Add a Geometry class object to the list of geometry objects """
@@ -639,6 +656,9 @@ class GeometryEngine():
             if self.debug > 1:
                 print "obs: len=",len(obs)," data:",obs
             geo = Geometry()
+            # Pass some basic settings on to the Geomtery object.
+            geo.force_unit_conversion = self.force_unit_conversion
+            geo.base_units = self.base_units
             geo.debug = self.debug
             geo.__init__(obs)
             nerr = geo.validate()
@@ -743,6 +763,9 @@ class GeometryEngine():
             else:
                 return(self._Geometry[item])
 
+    def __len__(self):
+        """Return the length, or the number of geometries in the GeometryEngine """
+        return(len(self._Geometry))
 
 def testsuite():
     """Test the GeometryEngine class, currently does nothing, sorry"""

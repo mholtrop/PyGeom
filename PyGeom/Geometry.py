@@ -284,7 +284,7 @@ class Geometry():
                     dims.append(ans)
                     dims_units.append(trans[unit])
                 else:
-                    dims.append(num)
+                    dims.append(float(num))
                     dims_units.append(unit)
 
         return(dims,dims_units)
