@@ -53,7 +53,7 @@ def main(argv=None):
         print("Rendering ",args.tables)
 
 
-    gen = GeometryEngine("clas12")
+    gen = GeometryEngine("pygeom")
     gen.debug = args.geomdebug
 
     # Run down the list of tables and load each of them into the Geometry
