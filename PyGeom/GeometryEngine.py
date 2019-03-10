@@ -11,8 +11,8 @@ This is the main "engine" for using the PyGeom package to create GEMC geometries
 import re
 import sys
 import warnings
-from __builtin__ import file
-from Geometry import Geometry
+
+from .Geometry import Geometry
 
 try:
     import MySQLdb
@@ -127,7 +127,7 @@ class GeometryEngine():
             If you want to ignore case, pass flags=re.IGNORECASE (which is 2)"""
 # OK, we usually have just one sensitive detector per geometry, so this might be over kill. Still it is handy.
         if not isinstance(self._Geometry,list):   # Are we initialized?
-            print "This GeometryEngine appears not to be inialized"
+            print("This GeometryEngine appears not to be inialized")
             return(None)
 
         prog = re.compile(name,flags)
@@ -141,7 +141,7 @@ class GeometryEngine():
         """ Find a particular geometry with name=sens_name from the Detector Geometry table """
 # OK, we usually have just one sensitive detector per geometry, so this might be over kill. Still it is handy.
         if not isinstance(self._Geometry,list):   # Are we initialized?
-            print "GeometryEngine seems not to be inialized"
+            print("GeometryEngine seems not to be inialized")
             return(None)
 
         found = [x for x in self._Geometry if x.name == name]
@@ -149,7 +149,7 @@ class GeometryEngine():
             return(None)
 
         if len(found)>1:
-            print "Warning: More than one Detector Geometry with name:"+ name+" found in GeometryEngine"
+            print("Warning: More than one Detector Geometry with name:"+ name+" found in GeometryEngine")
 
         return(found[0])
 
@@ -159,7 +159,7 @@ class GeometryEngine():
             If you want to ignore case, pass flags=re.IGNORECASE (which is 2)"""
 # OK, we usually have just one sensitive detector per geometry, so this might be over kill. Still it is handy.
         if not isinstance(self._Geometry,list):   # Are we initialized?
-            print "The GeometryEngine is not inialized, oops."
+            print("The GeometryEngine is not inialized, oops.")
             return(-1)
 
         prog = re.compile(name,flags)
@@ -173,7 +173,7 @@ class GeometryEngine():
         """ Find a list of geometries with mother=name from the Detector Geometry table """
 # OK, we usually have just one sensitive detector per geometry, so this might be over kill. Still it is handy.
         if not isinstance(self._Geometry,list):   # Are we initialized?
-            print "It seems that the GeometryEngine is not inialized"
+            print("It seems that the GeometryEngine is not inialized")
             return(None)
 
         found = [x for x in self._Geometry if x.mother == name]
@@ -186,17 +186,17 @@ class GeometryEngine():
         """ Find a particular sensitivity with name=sens_name from the Sensitive Detector table """
 # OK, we usually have just one sensitive detector per geometry, so this might be over kill. Still it is handy.
         if not isinstance(self._Sensitive_Detector,list):   # Are we initialized?
-            print "Sensitive_Detector is not inialized"
+            print("Sensitive_Detector is not inialized")
             return(-1)
 
         found = [x for x in self._Sensitive_Detector if x.name == sens_name]
         if len(found)==0:
             if self.debug>1:
-                print "Sensitive detector "+ sens_name+" not found in GeometryEngine"
+                print("Sensitive detector "+ sens_name+" not found in GeometryEngine")
             return(None)
 
         if len(found)>1:
-            print "Warning: More than one Sensitive detector with name:"+ sens_name+" found in GeometryEngine"
+            print("Warning: More than one Sensitive detector with name:"+ sens_name+" found in GeometryEngine")
 
         return(found[0])
 
@@ -235,21 +235,21 @@ class GeometryEngine():
             self._Hit_Table = self._Detector + "__hit"
             self._Banks_Table = self._Detector + "__bank"
             if self.debug:
-                print "Database "+database+" opened for "+user+" on "+db_host
-                print self._DataBase
+                print("Database "+database+" opened for "+user+" on "+db_host)
+                print(self._DataBase)
         except Exception as e:
-            print "Error connecting to the database. Make sure MySQLdb is available."
-            print e
+            print("Error connecting to the database. Make sure MySQLdb is available.")
+            print(e)
 
     def MySQL_Table_Exists(self,table):
         """Returns True if the table exists, False if it does not. """
         if self.debug>2:
-            print "Looking if table exists with name:'"+table+"'"
+            print("Looking if table exists with name:'"+table+"'")
 
         sql = "show tables like '"+table+"'"
         n=self.sql_execute(sql)
         if self.debug>2:
-            print "Search returns:'"+str(n)+"' = "+str(n!=0)
+            print("Search returns:'"+str(n)+"' = "+str(n!=0))
 
         return(n!=0)
 
@@ -257,17 +257,17 @@ class GeometryEngine():
         """Find the lastest Id in the MySQL table for variation."""
 
         if self.debug>2:
-            print "Looking up the max(id) for table '"+table+"'"
+            print("Looking up the max(id) for table '"+table+"'")
         if not self.MySQL_Table_Exists(table):
             if self.debug>0:
-                print "ERROR: Table not found: '"+table+"'"
+                print("ERROR: Table not found: '"+table+"'")
             return(None)
 
         sql = "select max(id) from "+table+" where variation = '"+variation+"';"
         n=self.sql_execute(sql)
         f = self._cursor.fetchone()
         if self.debug>2:
-            print "From ID search we get '"+str(n)+"' with fetch: "+str(f)
+            print("From ID search we get '"+str(n)+"' with fetch: "+str(f))
 
         if f:
             if f[0]:
@@ -295,12 +295,12 @@ class GeometryEngine():
 
         if re.match('.*__hit',table) or re.match('.*__bank',table):
             if self.debug > 2:
-                print "Cleaning a hit or bank table: "+table
+                print("Cleaning a hit or bank table: "+table)
             sql = "delete from "+table+" where variation = '"+variation+"'"
 
         else:
             if self.debug > 2:
-                print "Cleaning a geometry table: "+table
+                print("Cleaning a geometry table: "+table)
             sql = "delete from "+table+" where variation = '"+variation+"' and id="+str(idn)
 
         n=self.sql_execute(sql)
@@ -315,7 +315,7 @@ class GeometryEngine():
             Note that an existing Geometry table will be deleted first, while a Parameters table is preseved."""
 
         if self._Detector ==0:
-            print "ERROR -- The detector does not appear to be correctly initialized."
+            print("ERROR -- The detector does not appear to be correctly initialized.")
             return()
 
         self.MySQL_New_Geometry_Table()
@@ -336,7 +336,7 @@ class GeometryEngine():
 
         if self.MySQL_Table_Exists(self._Geometry_Table):   # Table already exists
             if self.debug:
-                print "Geometry table: "+self._Geometry_Table+" already exists, no need to create."
+                print("Geometry table: "+self._Geometry_Table+" already exists, no need to create.")
             return(False)
 
         sql="""CREATE TABLE `"""+ self._Geometry_Table +"""` (
@@ -366,7 +366,7 @@ class GeometryEngine():
                        `id`   int(11)  DEFAULT 0, """
         sql+= """UNIQUE KEY (`variation`,`id`,`name`)) ENGINE=MyISAM DEFAULT CHARSET=latin1;"""
         if self.debug:
-            print "Creating Geometry table: "+self._Geometry_Table+"."
+            print("Creating Geometry table: "+self._Geometry_Table+".")
 
         n=self.sql_execute(sql)
         return(n)
@@ -379,7 +379,7 @@ class GeometryEngine():
 
         if self.MySQL_Table_Exists(self._Parameters_Table):   # Table already exists
             if self.debug:
-                print "Parameters table: "+self._Parameters_Table+" already exists, no need to create."
+                print("Parameters table: "+self._Parameters_Table+" already exists, no need to create.")
 
             return(False)
 
@@ -401,7 +401,7 @@ class GeometryEngine():
                        id                INT,
                        PRIMARY KEY (variation, id, name) );"""
         if self.debug:
-            print "Creating Parameters table: "+self._Parameters_Table+"."
+            print("Creating Parameters table: "+self._Parameters_Table+".")
         n=self.sql_execute(sql)
         return(n)
 
@@ -410,7 +410,7 @@ class GeometryEngine():
 
         if self.MySQL_Table_Exists(self._Hit_Table):   # Table already exists
             if self.debug:
-                print "Hit table: "+self._Hit_Table+" already exists, no need to create."
+                print("Hit table: "+self._Hit_Table+" already exists, no need to create.")
             return(False)
 
         sql="""create table IF NOT EXISTS """+ self._Hit_Table +"""( \
@@ -430,7 +430,7 @@ class GeometryEngine():
                         variation       VARCHAR(200),        \
                         PRIMARY KEY (variation, name)        );"""
         if self.debug:
-            print "Creating Hit table: "+self._Hit_Table+"."
+            print("Creating Hit table: "+self._Hit_Table+".")
         n=self.sql_execute(sql)
         return(n)
 
@@ -439,7 +439,7 @@ class GeometryEngine():
 
         if self.MySQL_Table_Exists(self._Banks_Table):   # Table already exist
             if self.debug:
-                print "Bank table: "+self._Banks_Table+" already exists, no need to create."
+                print("Bank table: "+self._Banks_Table+" already exists, no need to create.")
             return(False)
 
         sql = """create table IF NOT EXISTS """ + self._Banks_Table + """ ( \
@@ -452,7 +452,7 @@ class GeometryEngine():
                         variation       VARCHAR(200),            \
                         PRIMARY KEY (bankname, name, variation)  );"""
         if self.debug:
-            print "Creating Bank table: "+self._Banks_Table+"."
+            print("Creating Bank table: "+self._Banks_Table+".")
 
         n=self.sql_execute(sql)
         return(n)
@@ -491,21 +491,21 @@ class GeometryEngine():
 #        n=self._cursor.execute(sql)
 
         if self.debug>3:
-            print "SQL = " + sql
+            print("SQL = " + sql)
 
         try:
             n=self._cursor.execute(sql)
             if self.debug>3:
-                print "n = " + str(n)
-                print "#rows = "+str( self._DataBase.affected_rows() )
+                print("n = " + str(n))
+                print("#rows = "+str( self._DataBase.affected_rows() ))
         except _mysql_exceptions.Warning as e:
             if self.debug:
-                print "MySQL Warning: "+str(e)
-                print "For SQL: "+sql
+                print("MySQL Warning: "+str(e))
+                print("For SQL: "+sql)
         except Exception as e:
-            print e
-            print "Unexpected error:", sys.exc_info()[0]
-            print "For SQL: "+sql
+            print(e)
+            print("Unexpected error:", sys.exc_info()[0])
+            print("For SQL: "+sql)
             raise
 
         if self._always_commit:
@@ -517,7 +517,7 @@ class GeometryEngine():
             Note that the database must be initialized first with MySQL_OpenDB """
 
         if not self._DataBase:
-            print "ERROR -- Database was not initialized."
+            print("ERROR -- Database was not initialized.")
             return()
 
         self.MySQL_New_Tables()
@@ -535,7 +535,7 @@ class GeometryEngine():
         self.MySQL_Clean_Table(self._Geometry_Table, self.table_variation,self.table_id)
 
         if self.debug:
-            print "Writing out the geometry MySQL table for "+self._Detector+" with variation="+self.table_variation+" and id="+str(self.table_id)
+            print("Writing out the geometry MySQL table for "+self._Detector+" with variation="+self.table_variation+" and id="+str(self.table_id))
 
         for geo in self._Geometry:
             self.MySQL_Write_Volume(geo)
@@ -545,11 +545,11 @@ class GeometryEngine():
         """ Write the Geometry class object 'volume' to the MySQL table _Detector with 'variation' and 'table_id' """
 
         if not isinstance(volume,Geometry):
-            print "ERROR: Asked to write an object that is not a Geometry to the MySQL tables."
+            print("ERROR: Asked to write an object that is not a Geometry to the MySQL tables.")
             return(1)
 
         if self.debug >3:
-            print "Writing the geometry: "+volume.name
+            print("Writing the geometry: "+volume.name)
         sql = volume.MySQL_str(self._Geometry_Table,self.table_variation,self.table_id)
 #        if self.debug > 30:
 #            print "Insertion SQL: "+ sql
@@ -565,8 +565,8 @@ class GeometryEngine():
         for sens in self._Sensitive_Detector:
             sql = sens.hit_MySQL_str(self._Hit_Table,self.table_variation,self.table_id)
             if self.debug>2:
-                print "Writing the hit:"+sens.name
-                print "SQL: "+sql
+                print("Writing the hit:"+sens.name)
+                print("SQL: "+sql)
             self.sql_execute(sql)
 
     def MySQL_Write_Bank(self):
@@ -577,8 +577,8 @@ class GeometryEngine():
         for sens in self._Sensitive_Detector:
             sql = sens.bank_MySQL_str(self._Banks_Table,self.table_variation,self.table_id)
             if self.debug>2:
-                print "Writing the hit:"+sens.name
-                print "SQL: "+sql
+                print("Writing the hit:"+sens.name)
+                print("SQL: "+sql)
             self.sql_execute(sql)
 
 
@@ -594,7 +594,7 @@ class GeometryEngine():
         sql = "describe "+table
         err = self._cursor.execute(sql)
         if err <= 0:
-            print "Error executing MySQL command: describe "+table
+            print("Error executing MySQL command: describe "+table)
             return()
 
         ltable = self._cursor.fetchall()
@@ -602,7 +602,7 @@ class GeometryEngine():
         table_version = 2
         if len(vari) == 0:  # variation not found
             table_version = 1
-            print "Note: GEMC version 1 table found. Variation and id ignored"
+            print("Note: GEMC version 1 table found. Variation and id ignored")
 
         sql = "select name,mother,description,pos,rot,col,type,dimensions,"
         sql+= "material,magfield,ncopy,pMany,exist,visible,style,sensitivity,hitType,identity,"
@@ -624,7 +624,7 @@ class GeometryEngine():
            The code will be indented by 'indent' spaces.
             """
         fname = "Template_"+self._Detector+".py"
-        ff= file(fname,"w")
+        ff= open(fname,"w")
 
         s = ' '*indent+"from GeometryEngine import Geometry\n\n"
         ff.write(s)
@@ -650,11 +650,11 @@ class GeometryEngine():
         fin = open(mfile,"r")
 
         for line in fin:
-            obs = map(str.strip,line.split("|"))   # Split line on the |
+            obs = list(map(str.strip,line.split("|")))   # Split line on the |
             if len(obs) < 2:
                 continue
             if self.debug > 1:
-                print "obs: len=",len(obs)," data:",obs
+                print("obs: len=",len(obs)," data:",obs)
             geo = Geometry()
             # Pass some basic settings on to the Geomtery object.
             geo.force_unit_conversion = self.force_unit_conversion
@@ -663,8 +663,8 @@ class GeometryEngine():
             geo.__init__(obs)
             nerr = geo.validate()
             if nerr:
-                print "Validation error number="+str(nerr)+" for line:"
-                print line
+                print("Validation error number="+str(nerr)+" for line:")
+                print(line)
             self.add(geo)         # Create a Geometry based on line and put in GeometryEngine
 
         return
@@ -683,7 +683,7 @@ class GeometryEngine():
         """ Write the entire geometry to a TXT file called detector__geometry_variation.txt """
 
         fname = self._Detector + "__geometry_" + variation + ".txt"
-        ff = file(fname,"w")
+        ff = open(fname,"w")
 
         for geo in self._Geometry:
                 ff.write(str(geo)+"\n")
@@ -694,10 +694,10 @@ class GeometryEngine():
         """ Write the hit definitions to a TXT file called detector__hits_variation.txt """
 
         fname = self._Detector + "__hit_" + variation + ".txt"
-        ff = file(fname,"w")
+        ff = open(fname,"w")
 
         if self._Sensitive_Detector == 0:
-            print "ERROR:  No hits were defined!"
+            print("ERROR:  No hits were defined!")
             return()
 
         for hit  in self._Sensitive_Detector:
@@ -709,10 +709,10 @@ class GeometryEngine():
         """ Write the bank definitions to a TXT file called detector__banks.txt """
 
         fname = self._Detector + "__bank.txt"
-        ff = file(fname,"w")
+        ff = open(fname,"w")
 
         if self._Sensitive_Detector == 0:
-            print "ERROR:  No hits were defined!"
+            print("ERROR:  No hits were defined!")
             return()
 
         for hit  in self._Sensitive_Detector:
@@ -725,12 +725,12 @@ class GeometryEngine():
 
         if self._Materials == 0:
             if self.debug >0:
-                print "No materials defined. Not writing the materials txt file."
+                print("No materials defined. Not writing the materials txt file.")
 
             return()
 
         fname = self._Detector + "__materials_"+variation+".txt"
-        ff = file(fname,"w")
+        ff = open(fname,"w")
 
         for mat in self._Materials:
                 ff.write(str(mat)+"\n")
@@ -769,7 +769,7 @@ class GeometryEngine():
 
 def testsuite():
     """Test the GeometryEngine class, currently does nothing, sorry"""
-    print "I am not really implemented yet. Sorry"
+    print("I am not really implemented yet. Sorry")
 
 if __name__ == "__main__":
     testsuite()

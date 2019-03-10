@@ -157,7 +157,7 @@ class Geometry():
             self.hittype=hittype
             self.identity=identity
         else:
-            print("Geometry does not know how to handle input of type: ",type(name))
+            print(("Geometry does not know how to handle input of type: ",type(name)))
             return(0)
 
         if force_unit_conversion:
@@ -197,7 +197,7 @@ class Geometry():
                 conv_dict['m']=1.
                 conv_dict['inch']=0.0254
             elif u == "inch":
-                print "Warning: Base Units of Inches is not recommended for GEANT4"
+                print("Warning: Base Units of Inches is not recommended for GEANT4")
                 trans_dict['mm'] = trans_dict['cm'] = trans_dict['m'] = trans_dict['inch'] = u
                 conv_dict['mm']=0.1/2.54
                 conv_dict['cm']=1./2.54
@@ -235,7 +235,7 @@ class Geometry():
             order=tmp_list[1]
             dims,dims_units = self.parse_gemc_str(' '.join(tmp_list[2:]),base_unit)
         elif len(tmp_list)==1:  # Single statement. This is usually an erroneous "0" entry.
-            print("Warning: Rotation with only one entry: "+str(tmp_list[0]))
+            print(("Warning: Rotation with only one entry: "+str(tmp_list[0])))
             if not tmp_list[0] == "0":
                 print("But I don't know what to do with it! Setting rotation to zero.")
 
@@ -261,7 +261,7 @@ class Geometry():
         for p in tmp_list:
             if not re.search('\*',p):
                 if len(p)>1:
-                    print "Warning: expected unit but none found in:"+str(tmp_list)
+                    print("Warning: expected unit but none found in:"+str(tmp_list))
                 ans=float(p)
                 unit="";
                 dims.append(ans)
@@ -271,7 +271,7 @@ class Geometry():
                 try:
                     num,unit = p.split('*')
                 except :
-                    print("There was a problem parsing: ",p)
+                    print(("There was a problem parsing: ",p))
                     raise
 
                 if self.force_unit_conversion:
@@ -280,7 +280,7 @@ class Geometry():
                     ans = float(num)*conv[unit]
 
                     if self.debug>2:
-                        print "Conversion: ",p," to ",ans," ",trans[unit]
+                        print("Conversion: ",p," to ",ans," ",trans[unit])
                     dims.append(ans)
                     dims_units.append(trans[unit])
                 else:
@@ -329,14 +329,14 @@ class Geometry():
         if type(units) == str:
             units = [units]
         if self.debug > 3:
-            print "inital: item(",len(item),")=",item,"  units(",len(units),")=",units
+            print("inital: item(",len(item),")=",item,"  units(",len(units),")=",units)
 
         if len(units) == len(item):   # There is one unit for each item. Units may be mixed.
             for i in range(len(item)):
                 strout+=str(item[i])+"*"+units[i]+" "
         else:
             if len(units) > 1:
-                print "WARNING: There seems to be an issue here, item and units are different length: item="+str(item)+" units="+str(units)
+                print("WARNING: There seems to be an issue here, item and units are different length: item="+str(item)+" units="+str(units))
             for i in item:
                 strout+=str(i)+"*"+units[0]+" "
 
@@ -581,18 +581,18 @@ class Geometry():
         thetal = math.atan2( (c2x - c1x),depth )
 
         if dx1 <= 0 or dx2 <= 0 or pp1x > pp2x :
-            print "Probable problem with Trapezoid calculation:"
-            print "front="+str(front)+"  Depth="+str(depth)
-            print "p1x  ="+str(p1x)+"  p1z  ="+str(p1z)
-            print "p2x  ="+str(p2x)+"  p2z  ="+str(p2z)
-            print "pp1x =",pp1x,    "  pp2x =",pp2x
-            print "dx1  =",dx1,     "  dx2  =",dx2
-            print "theta1=",theta1, " theta2=",theta2
-            print "depth ="+str(depth) +"  z2 - p2z=",(z2-p2z),"  tan(theta2)=",math.tan(theta2)," (z2-p1z)*tan(theta1)=",(z2-p1z)*math.tan(-theta2)
-            print "c1x  ="+str(c1x)+"   c2x ="+str(c2x)
-            print "cx =  "+str(cx)+"   cz = "+str(cz)
-            print "cx'=  ",(pp1x+pp2x)/2.
-            print "thetal=",thetal
-            print "dx1  ="+str(dx1)+"   dx2 ="+str(dx2)
+            print("Probable problem with Trapezoid calculation:")
+            print("front="+str(front)+"  Depth="+str(depth))
+            print("p1x  ="+str(p1x)+"  p1z  ="+str(p1z))
+            print("p2x  ="+str(p2x)+"  p2z  ="+str(p2z))
+            print("pp1x =",pp1x,    "  pp2x =",pp2x)
+            print("dx1  =",dx1,     "  dx2  =",dx2)
+            print("theta1=",theta1, " theta2=",theta2)
+            print("depth ="+str(depth) +"  z2 - p2z=",(z2-p2z),"  tan(theta2)=",math.tan(theta2)," (z2-p1z)*tan(theta1)=",(z2-p1z)*math.tan(-theta2))
+            print("c1x  ="+str(c1x)+"   c2x ="+str(c2x))
+            print("cx =  "+str(cx)+"   cz = "+str(cz))
+            print("cx'=  ",(pp1x+pp2x)/2.)
+            print("thetal=",thetal)
+            print("dx1  ="+str(dx1)+"   dx2 ="+str(dx2))
 
         return( cx,cz,thetal,dx1,dx2)
