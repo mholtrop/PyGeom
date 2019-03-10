@@ -984,9 +984,17 @@ class GeometryROOT():
         shell = code.InteractiveConsole(context)  ## See: https://docs.python.org/2/library/code.html
         print("")
         print("You can now access the geometry through the ROOT browser")
-        print("You are in a Python shell. Exit by crtl-D (EOF).")
+        print("The GeometryROOT object is in the object 'rr'.")
+        print("Starting a ROOT browser and drawing geometry with rr.draw('ogl')")
+        print("You are now in a Python shell. Exit by crtl-D (EOF).")
 
         if init_view:
             shell.push("browser=ROOT.TBrowser()")
             shell.push("rr.draw('ogl')")
         shell.interact()
+
+    def SaveAs(self,filename=None):
+        if filename is None:
+            filename = self._geo_engine_current._Detector+".root"
+
+        self._geom.SaveAs(filename)
