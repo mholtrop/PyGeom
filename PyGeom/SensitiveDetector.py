@@ -85,15 +85,15 @@ class SensitiveDetector():
         outstr+= self.mvToMeV + " | "
         outstr+= self.pedestal + " | "
         outstr+= self.delay
-        return(outstr)
+        return outstr
 
     def bank_str(self):
         """ Return a multi line string containing the text of the EVIO bank definitions. """
-        print "Number of rows:" + str(len(self._BankRows))
-        outstr=""
+        print("Number of rows:" + str(len(self._BankRows)))
+        outstr = ""
         for row in self._BankRows:
             outstr += self.name + " | " + " | ".join(map(str,row))+"\n"  # join with | the str(row) components.
-        return(outstr)
+        return outstr
     
     def bank_MySQL_str(self,Table,variation,idn=1):
         """Return a MySQL string to fill a banks table."""

@@ -6,7 +6,7 @@
 import numpy as np
 import math
 
-import Rotation
+from PyGeom import Rotation
 
 class Vector(np.matrix):
     """ A class to simplify the matrix objects that behave as 3 vectors, i.e. a 1-d column matrix. 
@@ -25,7 +25,7 @@ class Vector(np.matrix):
                 elif data == 3:
                     submatrix = np.matrix((0,0,1)).T
                 else:
-                    print "Not understanding initializiation parameter: ",data
+                    print("Not understanding initializiation parameter: ",data)
                     raise ValueError
 
             elif isinstance(data,Rotation.Rotation) or isinstance(data,Vector) or isinstance(data,np.matrix) or isinstance(data,np.ndarray) or isinstance(data,list) or isinstance(data,tuple):
@@ -33,10 +33,10 @@ class Vector(np.matrix):
                 if submatrix.shape == (1,3):
                     submatrix = submatrix.T
                 elif submatrix.shape != (3,1):
-                    print "A vector must be a (3,1) shape column matrix type. This is ",submatrix.shape
+                    print("A vector must be a (3,1) shape column matrix type. This is ",submatrix.shape)
                     raise ValueError
                 else:
-                    print "Unexpected type to a Vector"
+                    print("Unexpected type to a Vector")
                     raise TypeError
         else:
             submatrix = np.matrix((0,0,0))

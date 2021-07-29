@@ -8,7 +8,7 @@
 import numpy as np
 import math
 
-import Vector
+from PyGeom import Vector
 
 class Rotation(np.matrix):
     """A class for manipulating rotation matrixes.
@@ -27,10 +27,10 @@ class Rotation(np.matrix):
             elif isinstance(data,Rotation) or isinstance(data,np.matrix) or isinstance(data,np.ndarray) or isinstance(data,list):
                 submatrix = np.matrix(data,dtype=dtype,copy=copy)
                 if submatrix.shape != (3,3):
-                    print "Must initialize with a 3x3 matrix"
+                    print("Must initialize with a 3x3 matrix")
                     raise ValueError
             else:
-                print "Unexpected data type to Rotation"
+                print("Unexpected data type to Rotation")
                 raise TypeError
                 
 
@@ -179,30 +179,30 @@ def testsuite():
             if maxdif < (r-r2).max():
                 maxdif = (r-r2).max()
 
-            print "Difference for: ("+str(alpha)+","+str(beta)+","+str(gamma)+" != "+str(r.GetXYZ())
-            print " r = \n"+str(r)
-            print " r2= \n"+str(r2)
-            print "----------------------"
-            print " r-r2 = " + str(r-r2)
-            print "----------------------"
-            print ""
+            print("Difference for: ("+str(alpha)+","+str(beta)+","+str(gamma)+" != "+str(r.GetXYZ()))
+            print(" r = \n"+str(r))
+            print(" r2= \n"+str(r2))
+            print("----------------------")
+            print(" r-r2 = " + str(r-r2))
+            print("----------------------")
+            print("")
 
         r3 = Rotation().rotateG4XYZ((alpha,beta,gamma))
         r4 = Rotation().rotateG4XYZ(r3.GetG4XYZ())
-        
+
         if ( (r3 - r4)> 1.e-4).any() :  # If any element differs more than one in 10^6
             if maxdif < (r3-r4).max():
                 maxdif = (r3-r4).max()
 
-            print "Difference for: ("+str(alpha)+","+str(beta)+","+str(gamma)+" != "+str(r3.GetG4XYZ())
-            print " r3 = \n"+str(r3)
-            print " r4 = \n"+str(r4)
-            print "----------------------"
-            print " r3-r4 = " + str(r3-r4)
-            print "----------------------"
-            print ""
+            print("Difference for: ("+str(alpha)+","+str(beta)+","+str(gamma)+" != "+str(r3.GetG4XYZ()))
+            print(" r3 = \n"+str(r3))
+            print(" r4 = \n"+str(r4))
+            print("----------------------")
+            print(" r3-r4 = " + str(r3-r4))
+            print("----------------------")
+            print("")
 
-    print "Max difference found: "+str(maxdif)
+    print("Max difference found: "+str(maxdif))
 
 if __name__ == "__main__":
     testsuite()
