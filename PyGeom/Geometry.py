@@ -159,6 +159,7 @@ class Geometry:
             self.identity = identity
         else:
             print("Geometry does not know how to handle input of type: ", type(name))
+            return(0)
 
         if force_unit_conversion:
             self.force_unit_conversion = force_unit_conversion

@@ -17,14 +17,13 @@ except ImportError as e:
 from PyGeom import GeometryROOT
 from PyGeom import GeometryEngine
 
-
 def main(argv=None):
     #############################################################################################################
     if argv is None:
         argv = sys.argv
-        
+
     parser = argparse.ArgumentParser(
-                description="""Python-ROOT Geometry Viewer 
+                description="""Python-ROOT Geometry Viewer
                 This code will read in a GEMC geometry table and render it through the ROOT TGeoManager engine.""",
                 epilog="""For more information, or errors, please email: maurik@physics.unh.edu """)
 
@@ -39,13 +38,15 @@ def main(argv=None):
 
     args = parser.parse_args(argv[1:])
 
+    print(type(args.debug))
+
     if args.debug:
         print("Debug level is: "+str(args.debug))
 
     if args.debug > 1:
         print("Rendering ", args.tables)
 
-    gen = GeometryEngine("clas12")
+    gen = GeometryEngine("pygeom")
     if args.geomdebug:
         gen.debug = args.geomdebug
     
@@ -59,12 +60,12 @@ def main(argv=None):
 
         if re.match('.*_materials_*',ff):  # This is a materials file.
             if args.debug: print("Parsing materials file",ff)
-            
+
             print("So sorry, but I don't have a materials parser... yet ...")
 
 
     # Now render the geometry and drop into interactive mode.
-    
+
     rr = GeometryROOT()
     if args.rootdebug:
         rr.debug = args.rootdebug
@@ -75,4 +76,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
-

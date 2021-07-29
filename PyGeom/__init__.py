@@ -1,6 +1,6 @@
 #
 # This is the PyGeom package, a set of Python classes that help in building Geant4
-# geometry for GEMC. 
+# geometry for GEMC.
 #
 #
 __all__ = ["GeometryEngine","Geometry","GeometryROOT","SensitiveDetector","Material","Rotation","Vector"]
@@ -11,7 +11,7 @@ from .SensitiveDetector import SensitiveDetector
 from .Material import Material
 from .Vector import Vector
 from .Rotation import Rotation
- 
+
 try:
     import ROOT
     from .GeometryROOT import GeometryROOT

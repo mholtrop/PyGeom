@@ -34,6 +34,7 @@ except ImportError as err:
     print(err)
     print("It seems you did not enable ROOT properly on your system. Please source 'thisroot.sh' or 'thisroot.csh' "
           "from the ROOT distribution.")
+    sys.exit()
 
 from .GeometryEngine import GeometryEngine
 from .Geometry import Geometry
@@ -84,7 +85,7 @@ class GeometryROOT:
 
             if geo.find_volume('root') is None:
                 if self.debug > 0:
-                    print("No root volume found, creating one.")
+                   print("No root volume found, creating one.")
                 self.create_root_volume()
             self.build_volumes(geo)
         #
@@ -165,12 +166,12 @@ class GeometryROOT:
         # We didn't find it, so let's build it.
         #
         if self.debug > 1:
-            print("Creating material: " + matname)
+             print("Creating material: " + matname)
 
         for geo in self._geo_engine:
             for mmat in geo._Materials:
                 if self.debug > 2:
-                    print("mmat" + str(mmat))
+                     print("mmat" + str(mmat))
                 if mmat.name == material or mmat.name == matname:
                     self._materials[matname] = ROOT.TGeoMixture(matname, len(mmat.components), mmat.density * g / cm3)
                     for cc in mmat.components:
@@ -244,14 +245,14 @@ class GeometryROOT:
 
         elif material == "G4_W" or material == "Tungsten":
 
-            self._materials[matname] = ROOT.TGeoMaterial("W", 183.84, 74, 19.25 * g / cm3);
+            self._materials[matname] = ROOT.TGeoMaterial("W", 183.84, 74, 19.25 * g / cm3)
 
         elif material == "LeadTungsten":
 
             self._materials[matname] = ROOT.TGeoMixture(matname, 3, 8.28 * g / cm3)
-            self._materials[matname].AddElement(self._mats_table.FindElement("Pb"), 1);
-            self._materials[matname].AddElement(self._mats_table.FindElement("W"), 1);
-            self._materials[matname].AddElement(self._mats_table.FindElement("O"), 4);
+            self._materials[matname].AddElement(self._mats_table.FindElement("Pb"), 1)
+            self._materials[matname].AddElement(self._mats_table.FindElement("W"), 1)
+            self._materials[matname].AddElement(self._mats_table.FindElement("O"), 4)
 
         elif material == "Scintillator" or material == "ScintillatorB" or material == "scintillator":
 
@@ -829,7 +830,6 @@ class GeometryROOT:
             transrot1 = 0
 
             if special == "@":
-
                 if self.debug > 4:
                     print("Special operation: " + str(special))
 
@@ -887,7 +887,7 @@ class GeometryROOT:
             print("Error -- Mother volume: " + mother + " is not found, so cannot build " + geo_vol.name)
             return
 
-        if geo_vol.name in self._shapes.keys():
+        if geo_vol.name in list(self._shapes.keys()):
             if self.debug > 7:
                 print("We have done the shape for '" + geo_vol.name + "' already. Skip.")
             return
@@ -995,3 +995,9 @@ class GeometryROOT:
             shell.push("browser=ROOT.TBrowser()")
             shell.push("rr.draw('ogl')")
         shell.interact()
+
+    def SaveAs(self,filename=None):
+        if filename is None:
+            filename = self._geo_engine_current._Detector+".root"
+
+        self._geom.SaveAs(filename)

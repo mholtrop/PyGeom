@@ -592,7 +592,7 @@ class GeometryEngine:
             if self.debug > 2:
                 print("Writing the hit:" + sens.name)
                 print("SQL: " + sql)
-            self.sql_execute(sql)
+           self.sql_execute(sql)
 
     def mysql_read_geometry(self, table, variation='original', idn=0):
         """Read the geometry from the MySQL table and store the result in this GeometryEngine.
@@ -785,7 +785,6 @@ class GeometryEngine:
 def testsuite():
     """Test the GeometryEngine class, currently does nothing, sorry"""
     print("I am not really implemented yet. Sorry")
-
 
 if __name__ == "__main__":
     testsuite()
