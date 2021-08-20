@@ -24,9 +24,10 @@ import numpy
 try:
     import ROOT
     #
-    # The following lines are work-arounds.
+    # The following lines are possible work-arounds if ROOT gives trouble opening the OpenGL display.
+    # This seems no longer needed as of ROOT 6.25
     #
-    ROOT.PyConfig.StartGuiThread = 'inputhook'  # Allow the OpenGL display to work without a crash.
+    # ROOT.PyConfig.StartGuiThread = 'inputhook'  # Allow the OpenGL display to work without a crash.
     # ROOT.TGeoMaterial.__init__._creates = False   # This is supposed to prevent python from crashing on exit,
     # ROOT.TGeoMedium.__init__._creates = False     # but it doesn't.
 
@@ -92,12 +93,17 @@ class GeometryROOT:
         # Setup the materials to be used.
         #
         # self.Create_Mats()
-        atexit.register(self.__atexit__)
 
-    def __atexit__(self):
-        """ Try to clean up after ourselves. """
-        print("Calling cleanup crew.")
-        del self._geom  # -- This doesn't work. ROOT has already badly cleaned this with the hook.
+    # The following code was an attempt for us to clean up after ROOT. As of ROOT 6.25 this seems
+    # to be detrimental rather than helpful.
+    # We do still see a "already deleted" error, which seems relatively harmless.
+    #
+    #     atexit.register(self.__atexit__)
+
+    # def __atexit__(self):
+    #     """ Try to clean up after ourselves. """
+    #     print("Calling cleanup crew.")
+    #     del self._geom  # -- This doesn't work. ROOT has already badly cleaned this with the hook.
 
     def close_geometry(self):
         """Close the ROOT GeometryManager:
@@ -973,8 +979,8 @@ class GeometryROOT:
 
         # use exception trick to pick up the current frame
         try:
-            raise None
-        except None:
+            raise NameError("dummy")
+        except NameError:
             frame = sys.exc_info()[2].tb_frame.f_back
 
         # evaluate commands in current context
@@ -992,11 +998,12 @@ class GeometryROOT:
         print("You are in a Python shell. Exit by crtl-D (EOF).")
 
         if init_view:
-            shell.push("browser=ROOT.TBrowser()")
+            # shell.push("import ROOT")
+            # shell.push("browser=ROOT.TBrowser()")
             shell.push("rr.draw('ogl')")
         shell.interact()
 
-    def SaveAs(self,filename=None):
+    def SaveAs(self, filename=None):
         if filename is None:
             filename = self._geo_engine_current._Detector+".root"
 
