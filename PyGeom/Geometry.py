@@ -288,6 +288,43 @@ class Geometry:
 
         return dims, dims_units
 
+    def translate_position(self, pos, units=None):
+        """Translate the position of (i.e. move) this object, making sure units match"""
+        if type(pos) == str and units is None:  # Input is e.g. "-1*cm 2*mm 3*inch"
+            pos, units = self.parse_gemc_str(pos)
+        elif type(pos) is list and type(pos[0]) is str and units is None:  # Input is ['-1*cm','2*mm', '3*inch']
+            pos, units = self.parse_gemc_str(" ".join(pos))
+        elif type(pos) is list and (type(pos[0]) is float or type(pos[0]) is int):
+            pass
+        else:
+            print(f"I do not thing the input is correct to translate_position: pos={pos} units={units}")
+
+        # Move the object while making sure the units are consistent:
+        conv, trans = self.unit_convert_dict(self.base_units)
+        for i in range(len(pos)):
+            self.pos[i] = self.pos[i]*conv[self.pos_units[i]] + pos[i]*conv[units[i]]
+            self.pos_units[i] = trans[self.pos_units[i]]
+
+    def translate_rotation(self, rot, units=None):
+        """Translate the rotation of (i.e. rotate) this object, making sure units match.
+        This will *only* change the rotation angles of the object by x,y,z and does not any matrix stuff.
+        In other words, these are not Euler rotations."""
+
+        if type(rot) == str and units is None:  # Input is e.g. "-1*cm 2*mm 3*inch"
+            rot, units = self.parse_gemc_str(rot)
+        elif type(rot) is list and type(rot[0]) is str and units is None:  # Input is ['-1*cm','2*mm', '3*inch']
+            rot, units = self.parse_gemc_str(" ".join(rot))
+        elif type(rot) is list and (type(rot[0]) is float or type(rot[0]) is int):
+            pass
+        else:
+            print(f"I do not thing the input is correct to translate_position: pos={rot} units={units}")
+
+        # Move the object while making sure the units are consistent:
+        conv, trans = self.unit_convert_dict(self.base_units)
+        for i in range(len(rot)):
+            self.rot[i] = self.rot[i] * conv[self.rot_units[i]] + rot[i] * conv[units[i]]
+            self.rot_units[i] = trans[self.rot_units[i]]
+
     def set_position(self, pos, units):
         """ Set the position from a string or a list, in the latter case use units for the units."""
         if type(pos) == str:

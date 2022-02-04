@@ -37,6 +37,20 @@ except ImportError as err:
           "from the ROOT distribution.")
     sys.exit()
 
+try:
+    import stl
+    assert 'Mode' in stl.__all__
+    assert 'Mesh' in stl.__all__
+    from stl import mesh
+except ImportError as e:
+    print("Could not import the stl package, please: pip install numpy-stl ")
+    print(e)
+    sys.exit(1)
+except AssertionError as e:
+    print("Probably not the correct version of stl. You need numpy-stl for this.")
+    sys.exit(1)
+
+
 from .GeometryEngine import GeometryEngine
 from .Geometry import Geometry
 from .Rotation import Rotation
@@ -61,7 +75,11 @@ class GeometryROOT:
     _trans_dict = 0
 
     def __init__(self, geo=None, name="GEMC", description="Python ROOT Geometry Engine for GEMC"):
-        """ Initialize the GeometryEngine class, starting up the ROOT.TGeoManager and define materials."""
+        """ Initialize the GeometryEngine class, starting up the ROOT.TGeoManager and define materials.
+        Arguments:
+            geo:  A Geometry Engine object
+            name: The name for the TGeoManager if no geo given.
+            description: The description for the TGeoManager if no geo given."""
 
         self._geo_engine = []  # Make sure this is a clean list, not a global list.
         self._materials = {}
@@ -72,13 +90,14 @@ class GeometryROOT:
         self._color_idx = None
 
         # Get a unit conversion table from the Geometry class. Yes, it needs a minimal init.
+        self._conv_dict, self._trans_dict = Geometry(name="convert", g4type="").unit_convert_dict("cm deg")
+
         if geo is None or len(geo) == 0:
-            self._conv_dict, self._trans_dict = Geometry(name="convert", g4type="").unit_convert_dict("cm deg")
             self._geom = ROOT.TGeoManager(name, description)
             self._mats_table = self._geom.GetElementTable()
             self._geom.SetVisOption(0)
-
-        else:
+        elif isinstance(geo, GeometryEngine):
+            # This is the main task, building ROOT geometry from a GeometryEngine object.
             self._conv_dict, self._trans_dict = geo[0].unit_convert_dict("cm deg")
             self._geom = ROOT.TGeoManager(geo.get_name(), geo.get_description())
             self._mats_table = self._geom.GetElementTable()
@@ -89,6 +108,25 @@ class GeometryROOT:
                    print("No root volume found, creating one.")
                 self.create_root_volume()
             self.build_volumes(geo)
+
+        elif isinstance(geo, ROOT.TGeoManager):
+            # There is already a ROOT geometry here, so we will add to it.
+            self._geom = geo
+            self._mats_table = self._geom.GetElementTable()
+            self._geom.SetVisOption(0)
+
+        elif type(geo) is str:
+            # We got a filename, presumably
+            ff = ROOT.TFile(geo)
+            self._geom = ff.Get(name)  # We assume the name in the file is correct.
+            self._mats_table = self._geom.GetElementTable()
+            self._geom.SetVisOption(0)
+
+        else:
+            print("The geo passed to GeometryROOT is not of a recognized type.")
+            print(f"type(geo) = {type(geo)}")
+            return
+
         #
         # Setup the materials to be used.
         #
@@ -275,7 +313,7 @@ class GeometryROOT:
             self._materials[matname] = ROOT.TGeoMaterial(matname, 26.98, 13, 2.7);  # A,Z,rho
 
         else:
-            if self.debug:
+            if self.debug > 1:
                 print("OOPS, the material: " + material + " has not yet been defined in Python world. ", )
                 print("I'll pretend it is Aluminum...")
             return self.find_material("Aluminum", trans)
@@ -290,7 +328,7 @@ class GeometryROOT:
         self._volumes["root"] = self._geom.MakeBox("root", vacmat, size[0], size[1], size[2])
         self._volumes["root"].SetLineColor(18)  # ROOT light gray color.
         self._geom.SetTopVolume(self._volumes["root"])
-        self._geom.SetTopVisible(visible)
+ #       self._geom.SetTopVisible(visible)
 
     def create_color_for_root(self, color):
         """Root has a 'color index', the rest of the world has RGB values. Create a new color with
@@ -372,6 +410,8 @@ class GeometryROOT:
                 self.create_root_volume()
             else:
                 root_vol = geo.find_volume(mother)
+                if root_vol.exist == 0:  # Mother is turned off, so nothing to do here.
+                    return
                 if root_vol is None:
                     print("Cannot place root volume: " + mother + " because I cannot find it.")
                     raise NameError("Volume not found.")
@@ -531,6 +571,14 @@ class GeometryROOT:
     def get_volume_shape(self, geo_vol):
         """From the geo_vol description strings, return a new TGeoVolume shape.
            For Operations, the shape is computed from previously stored shapes and translation."""
+
+        # Check to see if we created this volume already previously. If so, just return it.
+        # This can happen when we have an out of order situation.
+        if geo_vol.name in self._shapes:
+            find_shape = self._shapes[geo_vol.name]
+            if find_shape is not None:
+                return find_shape
+
 
         if geo_vol.g4type == "Box":
             if type(geo_vol.dims_units) is str:
@@ -861,21 +909,66 @@ class GeometryROOT:
             newgeo_shape = ROOT.TGeoCompositeShape(geo_vol.name + "_shape", opshape)
 
         elif re.match("CopyOf .*", geo_vol.g4type):
+            #
+            # This places a copy of a particular shape.
+            # With Gemc geometries, the issue is that this shape may be defined at some *later* point in the
+            # geometry tables. In that case, we won't find it and have to go to the geometry table to see if
+            # we can locate it and create the shape. We need to make sure we do not do this twice.
+            #
             match = re.match("CopyOf (.*)", geo_vol.g4type)
             shape_name = match.group(1)
-            if self.debug: print("Making and placing a copy of " + shape_name)
-            find_shape = self._shapes[shape_name]
+            if self.debug:
+                print("Making and placing a copy of " + shape_name)
+
+            find_shape = None
+            if shape_name in self._shapes:
+                find_shape = self._shapes[shape_name]
             if find_shape is None:
-                print("The Shape " + shape_name + " was not found, or not yet placed!")
-                raise
+                # The shape was not yet created. See if it lives some where else in the geometry tables.
+                geo_vol = self._geo_engine_current.find_volume(shape_name)
+                if geo_vol is None:
+                    print("The Shape " + shape_name + " was not found, and no geometry if found either!")
+                    raise NameError("The geometry shape: " + shape_name + " is not yet placed.")
+                newgeo_shape = self.get_volume_shape(geo_vol)  # Create the volume shape from the geometry definition.
             else:
+                # We found the shape for this copy. Return it so it can be build.
                 newgeo_shape = find_shape
+        elif geo_vol.g4type == "CAD":
+            # Special type for Gemc, STL files.
+            if self.debug:
+                print("GeometryROOT was asked to place an STL volume called ", geo_vol.name)
+            facs = self.read_stl_file(geo_vol.description)
+            newgeo_shape = ROOT.TGeoTessellated(geo_vol.name, len(facs))
+            for fac in facs:
+                newgeo_shape.AddFacet(fac[0], fac[1], fac[2])
+            if not newgeo_shape.CheckClosure():
+                print(f"WARNING: The STL volume {geo_vol.name} is not closed.")
+
         else:
             raise NameError("The geometry shape: " + geo_vol.g4type + " is not yet defined.")
 
         self._shapes[geo_vol.name] = newgeo_shape
 
         return newgeo_shape
+
+    def read_stl_file(self, f):
+        """Read an stl file and return the containing stl mesh object"""
+        mm = mesh.Mesh.from_file(f)
+        facets = []
+        for tessel in mm.vectors:
+            if len(tessel) != 3:
+                v0 = ROOT.Geom.Vertex_t(tessel[0][0], tessel[0][1], tessel[0][2])
+                v1 = ROOT.Geom.Vertex_t(tessel[1][0], tessel[1][1], tessel[1][2])
+                v2 = ROOT.Geom.Vertex_t(tessel[2][0], tessel[2][1], tessel[2][2])
+                v3 = ROOT.Geom.Vertex_t(tessel[3][0], tessel[3][1], tessel[3][2])
+                facets.append((v0, v1, v2, v3))
+            else:
+                v0 = ROOT.Geom.Vertex_t(tessel[0][0], tessel[0][1], tessel[0][2])
+                v1 = ROOT.Geom.Vertex_t(tessel[1][0], tessel[1][1], tessel[1][2])
+                v2 = ROOT.Geom.Vertex_t(tessel[2][0], tessel[2][1], tessel[2][2])
+                facets.append((v0, v1, v2))
+
+        return facets
 
     def place_volume(self, geo_vol, mother=None):
         """ Place the Geometry object geo_vol onto the ROOT geometry tree under the volume 'mother' """
@@ -924,11 +1017,15 @@ class GeometryROOT:
             print("    rotation :" + str(geo_vol.rot) + "  rot units:" + str(geo_vol.rot_units))
             print("    color: " + str(color))
             print("")
-        newgeo_shape = self.get_volume_shape(geo_vol)
+
+        try:
+            newgeo_shape = self.get_volume_shape(geo_vol)
+        except NameError:
+            newgeo_shape = None
 
         if newgeo_shape == 0 or newgeo_shape is None:
-            if self.debug:
-                print("Cannot place this volume on the stack.")
+            if self.debug > 0:
+                print(f"Warning: Cannot place volume {geo_vol} on the stack.")
                 return
 
         if self.debug > 6:
@@ -952,7 +1049,7 @@ class GeometryROOT:
         """ draw an wireframe version of the objects """
         topvol = self._geom.GetTopVolume()
         self._geom.SetVisOption(0)
-        self._geom.SetTopVisible(0)
+#        self._geom.SetTopVisible(0)
         topvol.SetVisibility(0)
         topvol.Draw(option)
 

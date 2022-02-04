@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 #
+"""
+This tool parses the output log file of Gemc (or other GEANT4 based code) to look for the error statements that
+indicate a geometry overlap. It will then use the PyGeom and GeometryROOT to build a geometry where each overlap
+is represented by a small red box. Use -h to get a set of options for controlling the behavior of the code.
+"""
+
 import sys
 import PyGeom as Geom
 import re
@@ -28,6 +34,9 @@ def g4_exception_bloc(lines, search_start):
 
 
 def g4_geomnav_exception_parser(lines, block_start, block_end):
+    """Function that parses the exceptions from GEANT4 when you have overlaps that were
+    found during particle navigation. I.e. a particle traverses the overlap and is confused
+    as to which volume it is supposed to be in."""
     patt_current_phys_vol = re.compile(r"Current\s+phys volume:\s+'(.*)'", re.IGNORECASE)
     patt_previous_phys_vol = re.compile(r"Current\s+phys volume:\s+'(.*)'", re.IGNORECASE)
     patt_position = re.compile(r"at position\s*:\s*\(\s*([-+\d.]+)\*?,\s?([-+\d.]+)\s*,\s?([-+\d.]+)\s*\)",
@@ -57,6 +66,8 @@ def g4_geomnav_exception_parser(lines, block_start, block_end):
 
 
 def g4_overlap_exception_parser(lines, block_start, block_end, debug=False):
+    """Function that parses the exceptions from GEANT4 when you have overlaps that were found
+    with the overlap checker. This is turned on for GEMC with the option: -CHECK_OVERLAPS=1 """
     patt_current_phys_vol = re.compile(r"Overlap is detected for volume\s+(.*)\s+\((.*)\)", re.IGNORECASE)
     patt_previous_phys_vol1 = re.compile(r"with its mother volume\s+(.*)\s+\((.*)\)", re.IGNORECASE)
     patt_previous_phys_vol2 = re.compile(r"with\s+(.*)\s+\((.*)\) volume", re.IGNORECASE)
@@ -94,17 +105,19 @@ def g4_overlap_exception_parser(lines, block_start, block_end, debug=False):
         for i in range(block_start, block_end+1):
             print(lines[i].rstrip())
 
-    return position, current_phys_vol, current_phys_type, previous_phys_vol, previous_phys_type, overlap
+    return position, current_phys_vol, previous_phys_vol, current_phys_type, previous_phys_type, overlap
 
 
 def overlap_parser(infile):
     """Read the infile, the log output from Gemc, and search for the GEANT4 overlap statements.
     Infile:  Input, Gemc log file.
-    Returns: List containting tupples with:
+    Returns: List containing tuples with:
+            3-D space points where overlaps occurred.
             Name of current volume.
             Name of previous volume.
-            3-D space points where overlaps occurred.
-            3-D directions of track at that point.
+
+            Then either: 3 vector direction of track
+            Or: current volume type, previous volume type, overlap length.
     """
 
     patt_type_geomnav = re.compile(r"\*\*\* G4Exception\s+:\s+GeomNav", re.IGNORECASE)
@@ -130,12 +143,11 @@ def overlap_parser(infile):
     return parser_out
 
 
-def make_gemc_geometry(overlaps, geo=None, color="#ff0000"):
+def make_gemc_geometry(overlaps, geo=None, color="#ff0000", size=10.):
     """Convert the list of overlaps into a gemc table that puts a small marker dot at each location."""
     if geo is None:
         geo = Geom.GeometryEngine("overlaps")
 
-    size = 10.
     i = 1
     for overlap in overlaps:
         pos = overlap[0]
@@ -178,26 +190,95 @@ def main(argv=None):
     parser.add_argument('-d', '--debug', action="count", help="Be more verbose if possible. ", default=0)
     parser.add_argument('-i', '--interactive', action="store_true",
                         help="Give an interactive python prompt after processing.")
+    parser.add_argument('-G', '--GeoDir', type=str, default=None,
+                        help="Add a geometry directory which will be prepended to each argument in -g.")
+    parser.add_argument('-g', '--geometry', type=str, nargs="+",
+                        help="Add a GEMC txt geometry or gcard to be displayed in light grey." 
+                             "Multiple geometry files can be added, separated by a space.")
     parser.add_argument('-s', '--show', action="store_true",
                         help="Show the resulting geometry after processing.")
-    parser.add_argument('-o', '--output', type=str, default="Gemc_output_parser.root",
-                        help="Set the output file name. Default is Gemc_output_parser.root")
+    parser.add_argument('-S', '--size', type=int, help="Set the size of the overlap marker. default =10.mm",
+                        default=10)
+    parser.add_argument('-e', '--excel', type=str, help="Write the overlaps to an excel file with specified name.",
+                        default=None)
+    parser.add_argument('-o', '--outfile', type=str, default=None,
+                        help="Set the GEMC geometry output txt file name. Default is not to write a file.")
+    parser.add_argument('-r', '--rootfile', type=str, default=None,
+                        help="Set the output root file name. Default is not to write a file.")
     parser.add_argument('InputFile', type=str, help='Input file to parse.')
     args = parser.parse_args(argv[1:])
+    if args.debug:
+        print(f"Debug set to {args.debug}")
 
     print(f"Parsing {args.InputFile }")
     overlaps = overlap_parser(args.InputFile)
-    geo = make_gemc_geometry(overlaps)
-    geo.txt_write_geometry()
-    rr = Geom.GeometryROOT()
-    rr.build_volumes(geo, "root")
-    rr.close_geometry()
-    rr.SaveAs(args.output)
-    if args.show:
-        rr.Draw("ogl")
-        input("Just waiting until you enter something ...")
-    if args.interactive:
-        rr.interact()
+
+    print(f"Found {len(overlaps)} overlaps.")
+
+    if args.excel:
+        # Re-write the data for excel export.
+        excel_data = []
+        if len(overlaps[0]) == 6:
+            excel_col_names = ["x", "y", "z", "Name", "Previous", "CurrentVolType", "PrevVolType", "overlap"]
+            for o in overlaps:
+                excel_row = [o[0][0], o[0][1], o[0][2], o[1], o[2], o[3]]
+                for i in range(4, len(o)):
+                    excel_row.append(o[i])
+                excel_data.append(excel_row)
+
+        elif len(overlaps[0]) == 4:
+            excel_col_names = ["x", "y", "z", "Name", "Previous", "dir_x", "dir_y", "dir_z"]
+            for o in overlaps:
+                excel_row = [o[0][0], o[0][1], o[0][2], o[1], o[2], o[3][0], o[3][1], o[3][2]]
+                excel_data.append(excel_row)
+
+        else:
+            print(f"No header. We got len(overlaps[0]) = {len(overlaps[0])}")
+            print(overlaps[0])
+
+        import pandas as pd
+        pd_dat = pd.DataFrame(excel_data, columns=excel_col_names)
+        pd_dat.to_excel(args.excel)
+
+    geo = make_gemc_geometry(overlaps, size=args.size)
+    geo.debug = args.debug
+
+    if args.outfile is not None:
+        geo.txt_write_geometry(name_overwrite=args.outfile)
+
+    last_overlap = len(geo._Geometry) - 1  ## Fixme: GeometryEngine should have a better way of getting this.
+    if args.debug:
+        print(f"Found {last_overlap+1:6d} overlaps.")
+
+    if args.geometry is not None and len(args.geometry):
+        prepend = args.GeoDir + "/" if args.GeoDir is not None else ""
+        for vol in args.geometry:
+            if re.match('.*\.gcard', vol):
+                if args.debug:
+                    print(f"Add the gcard file: {vol}")
+                geo.parse_gcard(vol)
+            else:
+                full_path = prepend + vol
+                last_count = len(geo._Geometry)
+                geo.txt_read_geometry(full_path)
+                if args.debug:
+                    print(f"Added geometry file {full_path} with {len(geo._Geometry)- last_count} volumes.")
+
+        for x in geo._Geometry[last_overlap:]:
+            x.col = "cccccc9"
+
+    if args.show or args.rootfile:
+        rr = Geom.GeometryROOT()
+        rr.debug = args.debug
+        rr.build_volumes(geo, "root")
+        rr.close_geometry()
+        if args.rootfile is not None:
+            rr.SaveAs(args.rootfile)
+        if args.show:
+            rr.Draw("ogl")
+            input("Just waiting until you enter something ...")
+        if args.interactive:
+            rr.interact()
 
 if __name__ == '__main__':
     main()

@@ -8,9 +8,10 @@ A Helper library for GEANT4 geometries that plays well with GEMC geometries.
 This is the main "engine" for using the PyGeom package to create GEMC geometries and to render GEMC geometries in ROOT.
 """
 
+import os
 import re
 import sys
-import warnings
+
 from .Geometry import Geometry
 
 try:
@@ -27,6 +28,11 @@ except ImportError:
     stl = None
     mesh = None
 
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    print("Warning, xml.etree.ElementTree was not found. - will not be able to parse gcard files.")
+    ET = None
 
 class GeometryEngine:
     """A class for building GEANT4 geometries.
@@ -651,6 +657,104 @@ class GeometryEngine:
 
         return
 
+    def parse_gcard(self, gfile):
+        """Read the GCard file, gfile, and parse it for detector statements.
+        For each detector statement, attempt to load the geometry associated with that statement. """
+        xmldoc = ET.parse(gfile)
+        docroot = xmldoc.getroot()
+
+        for item in docroot.iter('detector'):  # Get all the <detector /> tags
+            if 'factory' not in item.attrib:
+                # Very unfortunately, the GCards have two differently behaving <detector name="" ...> tags.
+                # The first kind specifies the 'factory' and 'variation' and indicates which file to read for geometry
+                # The second kind modifies an earlier read geometry by translating the position.
+                name = item.attrib['name']
+                geo_obj = self.find_volume(name)
+                if geo_obj is not None:
+                    for subitem in item:
+                        if subitem.tag == 'position':
+                            dpos = [subitem.attrib['x'], subitem.attrib['y'], subitem.attrib['z']]
+                            if self.debug:
+                                print(f"Shifting position of {name} by {dpos}")
+                            geo_obj.translate_position(dpos)
+                        if subitem.tag == 'rotation':
+                            drot = [subitem.attrib['x'], subitem.attrib['y'], subitem.attrib['z']]
+                            if self.debug:
+                                print(f"Changing rotation of {name} by {drot}")
+                            geo_obj.translate_rotation(drot)
+                        if subitem.tag == 'existence':
+                            onoff = subitem.attrib['exist']
+                            if self.debug:
+                                print(f"Turning existence of {name} to: {onoff}")
+                            if onoff.lower() == 'no' or onoff.lower() == 'false' or onoff == '0':
+                                geo_obj.exist = 0
+                            else:
+                                geo_obj.exist = 1
+
+            elif item.attrib['factory'].upper() == 'TEXT':
+                file = os.environ.get('GEMC_DATA_DIR', '.') + '/' + item.attrib['name'] + '__geometry_' + \
+                       item.attrib.get('variation', 'default') + '.txt'
+                if os.path.exists(file):
+                    if self.debug:
+                        print(f"Adding the file {file} to the geometry.")
+                    self.txt_read_geometry(file)
+                else:
+                    print(f"ERROR with GCard: File not found {file}")
+
+            elif item.attrib['factory'].upper() == 'CAD':
+                cad_dir = os.environ.get('GEMC_DATA_DIR', '.') + '/' + item.attrib['name']
+                if os.path.exists(cad_dir):
+                    if self.debug:
+                        print(f"Parsing the CAD directory {cad_dir} to the geometry.")
+                    self.cad_read_geometry_dir(cad_dir)
+                else:
+                    print(f"ERROR with GCard: CAD directory not found {cad_dir}")
+
+    def cad_read_geometry_dir(self, cad_dir):
+        """Read a GEMC CAD directory and add each of the volumes specified in the cad.gxml file.
+        The cad.gxml file contains a list of volume names and STL files to add."""
+
+        if not os.path.exists(cad_dir + "/" + "cad.gxml"):
+            print(f"The cad.gxml file was not found: {cad_dir + '/' + 'cad.gxml'}")
+
+        xmldoc = ET.parse(cad_dir + "/" + "cad.gxml")
+        docroot = xmldoc.getroot()
+
+        for vol in docroot.iter('volume'):
+            vol_name = vol.attrib['name']
+            if self.debug > 1:
+                print(f"Adding volume entry for STL file {vol_name}.")
+                print("vol.attrib = ", vol.attrib)
+            geo = Geometry()
+
+            for it in vol.attrib:   # Unfortunately there is no consistency between the TXT and cad.gxml nomenclature.
+                it_trans = it
+                if it == 'color':   # Fix issues individually.
+                    it_trans = 'col'
+                elif it == 'hitType':
+                    it_trans = 'hittype'
+                elif it == 'identifiers':
+                    it_trans = 'identity'
+                elif it == 'position':
+                    geo.pos, geo.pos_units = geo.parse_gemc_str(vol.attrib[it])
+                    continue
+                elif it == 'rotation':
+                    geo.rot, geo.rot_units, geo.rot_order = geo.parse_gemc_rot_str(vol.attrib[it])
+                    continue
+                if it_trans in geo.__dict__:
+                    geo.__dict__[it_trans] = vol.attrib[it]
+                else:
+                    print("ERROR -- CAD description has attrib = ", it_trans, " and I do not know that.")
+
+            geo.g4type = "CAD"
+            geo.description = cad_dir + "/" + vol_name + ".stl"
+            geo.dimensions = ""
+            geo.dims_units = ""
+            self.add(geo)
+            if self.debug > 1:
+                print("Added: ", geo.__str__())
+
+
     def txt_read_geometry(self, mfile=0):
         """Read in a GEMC TXT file format geometry.
            If you specify 'file=' then exactly that file will be read.
@@ -658,7 +762,11 @@ class GeometryEngine:
         if not mfile:
             mfile = self._Detector + "__geometry_original.txt"
 
-        fin = open(mfile, "r")
+        fin = None
+        if type(mfile) is str:
+            fin = open(mfile, "r")
+        else:
+            fin = mfile
 
         for line in fin:
             obs = list(map(str.strip, line.split("|")))  # Split line on the |
